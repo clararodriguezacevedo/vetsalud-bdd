@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VetSalud · panel de consultas</title>
+  <style>
+    :root { --fg: #1f2421; --muted: #6b726c; --line: #e3e6e2; --accent: #1d9e75; --bg: #fafbfa; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
+    header { padding: 24px 32px; border-bottom: 1px solid var(--line); background: #fff; }
+    header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+    header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+    main { display: grid; grid-template-columns: 280px 1fr; gap: 0; min-height: calc(100vh - 73px); }
+    nav { padding: 20px; border-right: 1px solid var(--line); background: #fff; }
+    nav h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 12px; }
+    button { display: block; width: 100%; text-align: left; padding: 10px 12px; margin-bottom: 8px;
+      border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: var(--fg); }
+    button:hover { border-color: var(--accent); }
+    .row { display: flex; gap: 6px; margin-bottom: 8px; }
+    .row input { flex: 1; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; width: 100%; }
+    .row button { margin: 0; width: auto; white-space: nowrap; }
+    section { padding: 24px 32px; overflow: auto; }
+    .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+    pre { background: #0f1512; color: #c8e6d8; padding: 16px; border-radius: 10px; font-size: 13px;
+      line-height: 1.5; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
+    .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
+    .mongo { background: #e1f5ee; color: #0f6e56; }
+    .redis { background: #fbeaf0; color: #993556; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>VetSalud · panel de consultas</h1>
+    <p>Persistencia políglota — MongoDB (dominio) + Redis (stock)</p>
+  </header>
+  <main>
+    <nav>
+      <h2>Consultas</h2>
+      <button onclick="get('/api/pacientes-activos', '1 · Pacientes activos + propietario')">
+        1 · Pacientes activos<span class="pill mongo">Mongo</span>
+      </button>
+      <button onclick="get('/api/top-diagnosticos', '7 · Top 5 diagnósticos')">
+        7 · Top diagnósticos<span class="pill mongo">Mongo</span>
+      </button>
+      <button onclick="get('/api/stock-bajo?umbral=50', '8 · Stock bajo (&lt; 50 unidades)')">
+        8 · Stock bajo<span class="pill redis">Redis</span>
+      </button>
+
+      <h2 style="margin-top:24px">Decrementar stock (15)<span class="pill redis">Redis</span></h2>
+      <div class="row">
+        <input id="prod" placeholder="id (ej: PRD001)" value="PRD001" />
+        <input id="cant" placeholder="cant." value="3" style="max-width:70px" />
+      </div>
+      <button onclick="decrementar()">Aplicar decremento</button>
+    </nav>
+    <section>
+      <div class="label" id="titulo">Elegí una consulta del panel izquierdo.</div>
+      <pre id="salida">{ }</pre>
+    </section>
+  </main>
+
+  <script>
+    const salida = document.getElementById('salida');
+    const titulo = document.getElementById('titulo');
+
+    function render(title, data) {
+      titulo.innerHTML = title;
+      salida.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function get(url, title) {
+      titulo.textContent = 'Cargando…';
+      try {
+        const res = await fetch(url);
+        render(title, await res.json());
+      } catch (e) {
+        render(title, { error: e.message });
+      }
+    }
+
+    async function decrementar() {
+      const id_producto = document.getElementById('prod').value.trim();
+      const cantidad = Number(document.getElementById('cant').value);
+      try {
+        const res = await fetch('/api/decrementar-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id_producto, cantidad }),
+        });
+        render(`15 · Decremento de ${id_producto} (-${cantidad})`, await res.json());
+      } catch (e) {
+        render('15 · Decremento', { error: e.message });
+      }
+    }
+  </script>
+</body>
+</html>

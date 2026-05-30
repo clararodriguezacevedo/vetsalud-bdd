@@ -1,0 +1,9 @@
+id_paciente,nombre,especie,raza,fecha_nac,id_propietario,activo
+P001,Firulais,Perro,Labrador,2019-04-12,C001,True
+P002,Michi,Gato,Siamés,2021-07-03,C002,True
+P003,Coco,Perro,Beagle,2018-11-20,C001,False
+P004,Nube,Conejo,Angora,2022-02-14,C003,True
+P005,Rex,Perro,Pastor Alemán,2020-09-08,C004,True
+P006,Luna,Gato,Persa,2023-01-17,C005,True
+P007,Pipo,Perro,Poodle,2017-06-30,C002,True
+P008,Bambú,Ave,Cacatúa,2021-03-22,C006,True

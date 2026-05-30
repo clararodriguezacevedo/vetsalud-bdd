@@ -1,0 +1,7 @@
+id_producto,nombre,categoria,unidades,precio_unit,vencimiento,proveedor
+PRD001,Amoxicilina 250mg,Antibiótico,120,850,2026-06-30,VetFarma SA
+PRD002,Meloxicam 2mg,Antiinflamatorio,85,1200,2026-09-15,BioVet SRL
+PRD003,Ivermectina 1%,Antiparasitario,60,950,2026-03-20,VetFarma SA
+PRD004,Frontline Spray,Antiparasitario,40,3500,2027-01-10,MediAnimal
+PRD005,Suero fisiológico 1L,Solución,200,400,2026-12-01,BioVet SRL
+PRD006,Ketamina 10%,Anestésico,25,5800,2026-05-01,MediAnimal

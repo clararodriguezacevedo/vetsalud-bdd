@@ -1,0 +1,7 @@
+id_propietario,nombre,apellido,dni,email,telefono,ciudad,provincia
+C001,Ana,Rodríguez,30456789,ana@gmail.com,1145001234,Buenos Aires,Buenos Aires
+C002,Roberto,Díaz,27654321,rob@gmail.com,1156002345,Rosario,Santa Fe
+C003,Valentina,Molina,41234567,vale@gmail.com,1167003456,Córdoba,Córdoba
+C004,Diego,Herrera,35789012,diego@gmail.com,1178004567,Mendoza,Mendoza
+C005,Paula,Sosa,38012345,paula@gmail.com,1189005678,La Plata,Buenos Aires
+C006,Tomás,Juárez,42345678,tomas@gmail.com,1190006789,Salta,Salta

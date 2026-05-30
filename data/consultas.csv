@@ -1,0 +1,9 @@
+id_consulta,id_paciente,id_vet,fecha,motivo,diagnostico,costo,estado
+CON001,P001,V001,2025-10-05,Control anual,Sano,4500,Cerrada
+CON002,P002,V003,2025-10-12,Alergia cutánea,Dermatitis atópica,6200,Cerrada
+CON003,P003,V002,2025-09-20,Fractura pata,Fractura radio,15000,Cerrada
+CON004,P004,V001,2025-11-01,Pérdida de apetito,Estrés ambiental,3800,Seguimiento
+CON005,P005,V005,2025-11-10,Vómitos recurrentes,Gastritis,5500,Seguimiento
+CON006,P006,V003,2025-11-18,Revisión piel,Eccema,4100,Cerrada
+CON007,P001,V001,2025-12-02,Control post-vacuna,Sin novedades,2000,Cerrada
+CON008,P007,V002,2025-12-10,Extracción dentaria,Periodontitis,12000,Cerrada

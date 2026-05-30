@@ -1,0 +1,6 @@
+id_vet,nombre,apellido,matricula,especialidad,sucursal,activo
+V001,Gabriela,Fontana,VET-0041,Clínica General,Palermo,True
+V002,Hernán,Castillo,VET-0078,Cirugía,Belgrano,True
+V003,Cecilia,Ríos,VET-0112,Dermatología,Palermo,True
+V004,Marcos,Aguirre,VET-0055,Odontología,Caballito,False
+V005,Lorena,Ibáñez,VET-0089,Clínica General,Caballito,True

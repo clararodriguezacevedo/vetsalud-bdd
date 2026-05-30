@@ -1,0 +1,7 @@
+id_vacuna,id_paciente,id_vet,fecha_aplicacion,nombre_vacuna,proxima_dosis
+VAC001,P001,V001,2025-10-05,Antirrábica,2026-10-05
+VAC002,P001,V001,2025-10-05,Sextuple,2026-10-05
+VAC003,P002,V001,2025-08-20,Triple Felina,2026-08-20
+VAC004,P005,V005,2025-11-10,Antirrábica,2026-11-10
+VAC005,P007,V005,2025-07-14,Sextuple,2026-07-14
+VAC006,P006,V003,2025-11-18,Triple Felina,2026-11-18
