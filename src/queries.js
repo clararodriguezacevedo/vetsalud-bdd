@@ -1,13 +1,6 @@
 import { connect } from './db.js';
 
-// =====================================================================
-//  CONSULTAS / SERVICIOS
-//  Hay 4 implementadas como ejemplo (1, 7, 8, 15) que muestran los dos
-//  patrones: aggregation pipeline en Mongo y operaciones sobre Redis.
-//  Las 11 restantes están como stubs con la pista de cómo encararlas.
-// =====================================================================
-
-// --- 1 · Pacientes activos con todos sus datos de propietario (Mongo) ---
+// 1 Pacientes activos con todos sus datos de propietario (Mongo)
 export async function pacientesActivosConPropietario() {
   const { db } = await connect();
   return db
@@ -27,7 +20,7 @@ export async function pacientesActivosConPropietario() {
     .toArray();
 }
 
-// --- 7 · Top 5 diagnósticos más frecuentes (Mongo) ---
+// 7 Top 5 diagnósticos más frecuentes (Mongo)
 export async function topDiagnosticos() {
   const { db } = await connect();
   return db
@@ -40,7 +33,7 @@ export async function topDiagnosticos() {
     .toArray();
 }
 
-// --- 8 · Stock con menos de N unidades y su proveedor (Redis) ---
+// 8 Stock con menos de N unidades y su proveedor (Redis)
 export async function stockBajo(umbral = 50) {
   const { redis } = await connect();
   // Sorted Set: traemos los ids con score (unidades) por debajo del umbral
@@ -53,7 +46,7 @@ export async function stockBajo(umbral = 50) {
   return productos;
 }
 
-// --- 15 · Decrementar unidades de un producto tras una consulta (Redis) ---
+// 15 Decrementar unidades de un producto tras una consulta (Redis)
 export async function decrementarStock(idProducto, cantidad) {
   const { redis } = await connect();
   const key = `producto:${idProducto}`;
@@ -66,30 +59,188 @@ export async function decrementarStock(idProducto, cantidad) {
   return { id_producto: idProducto, unidades };
 }
 
-// =====================================================================
-//  TODO — implementar siguiendo los patrones de arriba:
-//
-//  2  Consultas en 'Seguimiento' con veterinario y costo
-//        Mongo: $match { estado: 'Seguimiento' } + $lookup a veterinarios
-//  3  Historial de un paciente: consultas + vacunaciones ordenadas por fecha
-//        Mongo: dos queries y mergear en JS, o $unionWith
-//  4  Propietarios con más de un paciente
-//        Mongo: $group por id_propietario + $match { count: { $gt: 1 } }
-//  5  Veterinarios activos y nº de consultas en los últimos 60 días
-//        Mongo: $match fecha >= hoy-60d + $group por id_vet
-//  6  Pacientes con vacunas vencidas (proxima_dosis < hoy)
-//        Mongo: $match { proxima_dosis: { $lt: new Date() } }
-//  9  Consultas tipo 'Control' con costo < 5000
-//        Mongo: $match { motivo: /Control/, costo: { $lt: 5000 } }
-//  10 Pacientes de una sucursal (vía veterinario)
-//        Mongo: veterinarios de la sucursal -> sus consultas -> pacientes
-//  11 Ingresos totales por veterinario en el mes actual
-//        Mongo: $match fecha en mes actual + $group $sum costo
-//  12 Propietarios sin consultas en el último año
-//        Mongo: $lookup pacientes->consultas + $match sin resultados
-//  13 ABM de propietarios (alta / modificación / baja lógica activo=false)
-//        Mongo: insertOne / updateOne / updateOne { activo: false }
-//  14 Alta de consulta validando paciente y veterinario existentes
-//        Mongo: verificar _id en pacientes y veterinarios, luego insertOne
-//        (opcional: encadenar decrementarStock del producto usado)
-// =====================================================================
+// 9 Consultas de tipo 'Control' con costo menor a $5.000 (Mongo)
+export async function controlesBaratos(maxCosto = 5000) {
+  const { db } = await connect();
+  return db
+    .collection('consultas')
+    .aggregate([
+      { $match: { motivo: { $regex: /control/i }, costo: { $lt: maxCosto } } },
+      {
+        $lookup: {
+          from: 'pacientes',
+          localField: 'id_paciente',
+          foreignField: '_id',
+          as: 'paciente',
+        },
+      },
+      { $unwind: '$paciente' },
+      { $sort: { costo: 1 } },
+      {
+        $project: {
+          motivo: 1, diagnostico: 1, costo: 1, fecha: 1,
+          'paciente.nombre': 1, 'paciente.especie': 1,
+        },
+      },
+    ])
+    .toArray();
+}
+
+// 10 Todos los pacientes de una sucursal, a través del veterinario (Mongo)
+export async function pacientesPorSucursal(sucursal) {
+  const { db } = await connect();
+  return db
+    .collection('veterinarios')
+    .aggregate([
+      { $match: { sucursal } },
+      {
+        $lookup: {
+          from: 'consultas',
+          localField: '_id',
+          foreignField: 'id_vet',
+          as: 'consultas',
+        },
+      },
+      { $unwind: '$consultas' },
+      { $group: { _id: '$consultas.id_paciente' } },
+      {
+        $lookup: {
+          from: 'pacientes',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'paciente',
+        },
+      },
+      { $unwind: '$paciente' },
+      { $replaceRoot: { newRoot: '$paciente' } },
+      { $sort: { _id: 1 } },
+    ])
+    .toArray();
+}
+
+// 11 Ingresos totales por veterinario en el mes actual (Mongo)
+export async function ingresosPorVetMesActual() {
+  const { db } = await connect();
+  const ahora = new Date();
+  const desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+  const hasta = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
+  return db
+    .collection('consultas')
+    .aggregate([
+      { $match: { fecha: { $gte: desde, $lt: hasta } } },
+      { $group: { _id: '$id_vet', ingresos: { $sum: '$costo' }, cantidad: { $sum: 1 } } },
+      {
+        $lookup: {
+          from: 'veterinarios',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'vet',
+        },
+      },
+      { $unwind: '$vet' },
+      {
+        $project: {
+          _id: 0, id_vet: '$_id',
+          veterinario: { $concat: ['$vet.nombre', ' ', '$vet.apellido'] },
+          sucursal: '$vet.sucursal', ingresos: 1, cantidad: 1,
+        },
+      },
+      { $sort: { ingresos: -1 } },
+    ])
+    .toArray();
+}
+
+// 12 Propietarios sin consultas registradas en el último año (Mongo)
+export async function propietariosSinConsultasUltimoAnio() {
+  const { db } = await connect();
+  const haceUnAnio = new Date();
+  haceUnAnio.setFullYear(haceUnAnio.getFullYear() - 1);
+  return db
+    .collection('propietarios')
+    .aggregate([
+      {
+        $lookup: {
+          from: 'pacientes',
+          localField: '_id',
+          foreignField: 'id_propietario',
+          as: 'pacientes',
+        },
+      },
+      {
+        $lookup: {
+          from: 'consultas',
+          let: { idsPac: '$pacientes._id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $in: ['$id_paciente', '$$idsPac'] },
+                    { $gte: ['$fecha', haceUnAnio] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'consultasRecientes',
+        },
+      },
+      { $match: { consultasRecientes: { $size: 0 } } },
+      { $project: { nombre: 1, apellido: 1, email: 1, ciudad: 1, provincia: 1 } },
+    ])
+    .toArray();
+}
+
+// ABM de propietarios: alta, modificación, baja lógica
+
+export async function altaPropietario(propietario) {
+  const { db } = await connect();
+  if (!propietario._id) throw new Error('Falta el _id del propietario');
+  const existe = await db.collection('propietarios').findOne({ _id: propietario._id });
+  if (existe) throw new Error(`El propietario ${propietario._id} ya existe`);
+  await db.collection('propietarios').insertOne({ activo: true, ...propietario });
+  return { ok: true, _id: propietario._id };
+}
+
+export async function modificarPropietario(id, cambios) {
+  const { db } = await connect();
+  delete cambios._id;
+  const r = await db.collection('propietarios').updateOne({ _id: id }, { $set: cambios });
+  if (r.matchedCount === 0) throw new Error(`El propietario ${id} no existe`);
+  return { ok: true, modificados: r.modifiedCount };
+}
+
+export async function bajaPropietario(id) {
+  const { db } = await connect();
+  const r = await db.collection('propietarios').updateOne({ _id: id }, { $set: { activo: false } });
+  if (r.matchedCount === 0) throw new Error(`El propietario ${id} no existe`);
+  return { ok: true, baja_logica: id };
+}
+
+// 14 Alta de consulta validando paciente y veterinario existentes
+export async function altaConsulta(consulta) {
+  const { db } = await connect();
+  const { id_paciente, id_vet } = consulta;
+  const paciente = await db.collection('pacientes').findOne({ _id: id_paciente });
+  if (!paciente) throw new Error(`El paciente ${id_paciente} no existe`);
+  const vet = await db.collection('veterinarios').findOne({ _id: id_vet });
+  if (!vet) throw new Error(`El veterinario ${id_vet} no existe`);
+  let _id = consulta._id;
+  if (!_id) {
+    const ult = await db.collection('consultas').find().sort({ _id: -1 }).limit(1).next();
+    const n = ult ? Number(String(ult._id).replace(/\D/g, '')) + 1 : 1;
+    _id = 'CON' + String(n).padStart(3, '0');
+  }
+  const doc = {
+    _id,
+    id_paciente,
+    id_vet,
+    fecha: consulta.fecha ? new Date(consulta.fecha) : new Date(),
+    motivo: consulta.motivo || '',
+    diagnostico: consulta.diagnostico || '',
+    costo: Number(consulta.costo) || 0,
+    estado: consulta.estado || 'Cerrada',
+  };
+  await db.collection('consultas').insertOne(doc);
+  return { ok: true, consulta: doc };
+}

@@ -25,6 +25,18 @@ app.get('/api/stock-bajo', wrap((req) => q.stockBajo(Number(req.query.umbral) ||
 app.post('/api/decrementar-stock', wrap((req) =>
   q.decrementarStock(req.body.id_producto, Number(req.body.cantidad))
 ));
+app.get('/api/controles-baratos', wrap((req) => q.controlesBaratos(Number(req.query.max) || 5000)));
+app.get('/api/pacientes-sucursal', wrap((req) => q.pacientesPorSucursal(req.query.sucursal || 'Palermo')));
+app.get('/api/ingresos-vet-mes', wrap(() => q.ingresosPorVetMesActual()));
+app.get('/api/propietarios-inactivos', wrap(() => q.propietariosSinConsultasUltimoAnio()));
+
+// 13 ABM de propietarios
+app.post('/api/propietarios', wrap((req) => q.altaPropietario(req.body)));
+app.put('/api/propietarios/:id', wrap((req) => q.modificarPropietario(req.params.id, req.body)));
+app.delete('/api/propietarios/:id', wrap((req) => q.bajaPropietario(req.params.id)));
+
+// 14 Alta de consulta con validación
+app.post('/api/consultas', wrap((req) => q.altaConsulta(req.body)));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API escuchando en http://localhost:${PORT}`));

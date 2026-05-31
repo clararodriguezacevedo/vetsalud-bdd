@@ -1,14 +1,11 @@
 # VetSalud — Sistema de Gestión de Clínica Veterinaria
 
-Trabajo Práctico de Base de Datos II. Arquitectura de **persistencia políglota**
+Trabajo Práctico de Base de Datos II. Arquitectura de persistencia políglota
 con dos motores NoSQL de paradigmas distintos:
 
 - **MongoDB** (documental) → dominio principal: `propietarios`, `pacientes`,
-  `veterinarios`, `consultas`, `vacunaciones`. Resuelve filtros y agregaciones
-  (la mayoría de las 15 consultas) con el aggregation pipeline y `$lookup`.
-- **Redis** (clave-valor) → stock farmacéutico. Hash por producto + un Sorted Set
-  (`stock:unidades`) que permite detectar bajo stock por rango y descontar unidades
-  de forma **atómica** con `HINCRBY`.
+  `veterinarios`, `consultas`, `vacunaciones`. 
+- **Redis** (clave-valor) → stock farmacéutico. 
 
 ## Cómo correrlo (GitHub Codespaces o local)
 
@@ -39,7 +36,7 @@ puerto 3000 automáticamente). El panel permite probar las consultas implementad
 ```
 vetsalud/
 ├── docker-compose.yml      # Mongo + Redis
-├── data/                   # CSV de ejemplo (reemplazar por los oficiales de la cátedra)
+├── data/                   # CSV 
 ├── public/index.html       # Frontend simple
 └── src/
     ├── db.js               # Conexión a ambos motores
@@ -48,16 +45,33 @@ vetsalud/
     └── server.js           # API Express
 ```
 
-## Estado de las consultas
+## Consultas implementadas (MongoDB)
 
-Implementadas como ejemplo: **1** (pacientes activos + propietario), **7** (top
-diagnósticos), **8** (stock bajo), **15** (decremento de stock). Las **11
-restantes** están como stubs comentados en `src/queries.js` con la pista de cómo
-resolverlas; cada una debe agregar su endpoint en `src/server.js` y, si se quiere,
-un botón en el frontend.
+| #  | Consulta | Función | Endpoint |
+|----|----------|---------|----------|
+| 9  | Controles con costo < $5.000 | `controlesBaratos` | `GET /api/controles-baratos?max=5000` |
+| 10 | Pacientes de una sucursal | `pacientesPorSucursal` | `GET /api/pacientes-sucursal?sucursal=Palermo` |
+| 11 | Ingresos por veterinario (mes actual) | `ingresosPorVetMesActual` | `GET /api/ingresos-vet-mes` |
+| 12 | Propietarios sin consultas (1 año) | `propietariosSinConsultasUltimoAnio` | `GET /api/propietarios-inactivos` |
+| 13 | ABM de propietarios | `altaPropietario` / `modificarPropietario` / `bajaPropietario` | `POST` / `PUT` / `DELETE /api/propietarios` |
+| 14 | Alta de consulta con validación | `altaConsulta` | `POST /api/consultas` |
 
-## Pendientes del enunciado
+### Probar las operaciones de escritura
 
-- Agregar **10+ registros propios** por colección/tabla.
-- Modelar **cirugías** (no hay CSV ni consultas): misma estructura que `consultas`.
-- Redactar en el informe la **justificación técnica** de por qué cada motor.
+```bash
+# 13 ABM de propietarios
+curl -X POST http://localhost:3000/api/propietarios \
+  -H "Content-Type: application/json" \
+  -d '{"_id":"C007","nombre":"Lucía","apellido":"Vega","dni":"40111222","email":"lu@mail.com","telefono":"1144","ciudad":"CABA","provincia":"Buenos Aires"}'
+
+curl -X PUT http://localhost:3000/api/propietarios/C007 \
+  -H "Content-Type: application/json" -d '{"ciudad":"Rosario"}'
+
+curl -X DELETE http://localhost:3000/api/propietarios/C007   # baja lógica: activo=false
+
+# 14 Alta de consulta (valida que paciente y vet existan)
+curl -X POST http://localhost:3000/api/consultas \
+  -H "Content-Type: application/json" \
+  -d '{"id_paciente":"P002","id_vet":"V003","motivo":"Control","diagnostico":"Sano","costo":3000}'
+```
+

@@ -17,7 +17,7 @@ const bool = (v) => String(v).toLowerCase() === 'true';
 async function main() {
   const { db, redis } = await connect();
 
-  // ----------------------------- MongoDB -----------------------------
+  // Mongo
   const propietarios = readCsv('propietarios.csv').map((r) => ({
     _id: r.id_propietario,
     nombre: r.nombre,
@@ -27,7 +27,7 @@ async function main() {
     telefono: r.telefono,
     ciudad: r.ciudad,
     provincia: r.provincia,
-    activo: true, // campo agregado para la baja lógica (consulta 13)
+    activo: true, // campo agregado para la baja lógica 
   }));
 
   const pacientes = readCsv('pacientes.csv').map((r) => ({
@@ -75,15 +75,15 @@ async function main() {
     const col = db.collection(nombre);
     await col.deleteMany({});
     if (docs.length) await col.insertMany(docs);
-    console.log(`Mongo · ${nombre}: ${docs.length} documentos`);
+    console.log(`Mongo ${nombre}: ${docs.length} documentos`);
   }
 
-  // Índices que aceleran las consultas por fecha y por referencias
+  // Índices por fecha y para referencias
   await db.collection('consultas').createIndex({ fecha: 1 });
   await db.collection('consultas').createIndex({ id_vet: 1 });
   await db.collection('pacientes').createIndex({ id_propietario: 1 });
 
-  // ------------------------------ Redis -------------------------------
+  // Redis
   const stock = readCsv('stock_farmaceutico.csv');
 
   const viejas = await redis.keys('producto:*');
@@ -99,10 +99,11 @@ async function main() {
       vencimiento: p.vencimiento,
       proveedor: p.proveedor,
     });
-    // Sorted Set: score = unidades → permite buscar bajo stock por rango (consulta 8)
+    // Sorted Set: score = unidades 
+    // Permite buscar bajo stock por rango 
     await redis.zAdd('stock:unidades', { score: Number(p.unidades), value: p.id_producto });
   }
-  console.log(`Redis · stock: ${stock.length} productos`);
+  console.log(`Redis stock: ${stock.length} productos`);
 
   await close();
   console.log('\nSeed completado correctamente.');
