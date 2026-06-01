@@ -3,187 +3,556 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VetSalud - panel de consultas</title>
+  <title>VetSalud</title>
   <style>
-    :root { --fg: #1f2421; --muted: #6b726c; --line: #e3e6e2; --accent: #1d9e75; --bg: #fafbfa; }
+    :root {
+      --fg: #1f2421; --muted: #6b726c; --line: #e3e6e2;
+      --accent: #1d9e75; --accent-soft: #e1f5ee; --accent-dark: #0f6e56;
+      --pill-bg: #eef2f6; --pill-fg: #4a6072;
+      --bg: #fafbfa; --card: #ffffff;
+    }
     * { box-sizing: border-box; }
-    body { font-family: system-ui, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
-    header { padding: 24px 32px; border-bottom: 1px solid var(--line); background: #fff; }
-    header h1 { margin: 0; font-size: 20px; font-weight: 600; }
-    header p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
-    main { display: grid; grid-template-columns: 280px 1fr; gap: 0; min-height: calc(100vh - 73px); }
-    nav { padding: 20px; border-right: 1px solid var(--line); background: #fff; }
-    nav h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 12px; }
-    button { display: block; width: 100%; text-align: left; padding: 10px 12px; margin-bottom: 8px;
-      border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; font-size: 14px; color: var(--fg); }
-    button:hover { border-color: var(--accent); }
-    .row { display: flex; gap: 6px; margin-bottom: 8px; }
-    .row input { flex: 1; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; width: 100%; }
-    .row button { margin: 0; width: auto; white-space: nowrap; }
-    section { padding: 24px 32px; overflow: auto; }
-    .label { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
-    pre { background: #0f1512; color: #c8e6d8; padding: 16px; border-radius: 10px; font-size: 13px;
-      line-height: 1.5; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
-    .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
-    .mongo { background: #e1f5ee; color: #0f6e56; }
-    .redis { background: #fbeaf0; color: #993556; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
+    header {
+      padding: 18px 32px; border-bottom: 1px solid var(--line); background: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    header .sub { color: var(--muted); font-size: 13px; }
+    nav.tabs {
+      display: flex; gap: 4px; padding: 0 32px; background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+    nav.tabs button {
+      background: transparent; border: none; padding: 14px 18px; font-size: 14px;
+      color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+      font-weight: 500; font-family: inherit;
+    }
+    nav.tabs button:hover { color: var(--fg); }
+    nav.tabs button.active { color: var(--accent-dark); border-bottom-color: var(--accent); }
+
+    main { padding: 24px 32px; max-width: 1400px; margin: 0 auto; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
+
+    .bento-pacientes {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(3, 1fr);
+      align-items: stretch;
+    }
+    .bento-pacientes > .stack {
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .bento-pacientes > .stack > .card { flex: 1; }
+
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+    .card p.desc { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+
+    .row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .row input, .row select {
+      flex: 1; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+      font-size: 13px; font-family: inherit; min-width: 0;
+    }
+    .row input:focus, .row select:focus { outline: none; border-color: var(--accent); }
+
+    button.action {
+      padding: 8px 14px; border: 1px solid var(--accent); background: var(--accent);
+      color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+      font-family: inherit;
+    }
+    button.action:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+    button.action.ghost { background: #fff; color: var(--accent-dark); }
+    button.action.ghost:hover { background: var(--accent-soft); }
+    button.action.danger { background: #fff; color: #b94a4a; border-color: #e9c8c8; }
+    button.action.danger:hover { background: #fbeaea; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .pill {
+      display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px;
+      margin-left: 6px; vertical-align: middle; font-weight: 600;
+      background: var(--pill-bg); color: var(--pill-fg);
+    }
+
+    /* Raw-query list */
+    .raw-list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .raw-list button {
+      text-align: left; padding: 10px 14px; background: #fff; border: 1px solid var(--line);
+      border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; color: var(--fg);
+    }
+    .raw-list button:hover { border-color: var(--accent); }
+    .raw-list button .pill { float: right; }
+
+    /* Results panel */
+    #results {
+      margin-top: 24px; background: var(--card); border: 1px solid var(--line);
+      border-radius: 10px; padding: 0; overflow: hidden;
+    }
+    #results .head {
+      padding: 14px 18px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    #results .head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    #results .head .meta { color: var(--muted); font-size: 12px; }
+    #results .body { padding: 18px; }
+    .toggle-json {
+      background: transparent; border: 1px solid var(--line); color: var(--muted);
+      padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+      font-family: inherit;
+    }
+    .toggle-json:hover { color: var(--fg); border-color: var(--fg); }
+
+    table.data { border-collapse: collapse; width: 100%; font-size: 13px; }
+    table.data th {
+      text-align: left; padding: 8px 10px; font-weight: 600; color: var(--muted);
+      border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .03em;
+      font-size: 11px; white-space: nowrap;
+    }
+    table.data th .sub-key {
+      display: block; font-size: 9px; color: #a0a8a3; font-weight: 500;
+      text-transform: uppercase; margin-top: 2px;
+    }
+    table.data td {
+      padding: 9px 10px; border-bottom: 1px solid #f0f2ef; vertical-align: top;
+    }
+    table.data tr:hover td { background: #fafbfa; }
+    table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    pre.json {
+      background: #0f1512; color: #c8e6d8; padding: 16px; border-radius: 8px;
+      font-size: 12px; line-height: 1.5; overflow: auto; max-height: 480px;
+      white-space: pre-wrap; word-break: break-word; margin: 14px 0 0;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    pre.json.hidden { display: none; }
+
+    .empty { color: var(--muted); font-size: 13px; text-align: center; padding: 24px; }
+    .success-msg, .error-msg {
+      padding: 10px 14px; border-radius: 6px; font-size: 13px; margin-bottom: 14px;
+    }
+    .success-msg { background: var(--accent-soft); color: var(--accent-dark); }
+    .error-msg { background: #fbeaea; color: #993333; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+    .badge.activo { background: var(--accent-soft); color: var(--accent-dark); }
+    .badge.inactivo { background: #f0f0f0; color: var(--muted); }
   </style>
 </head>
 <body>
   <header>
-    <h1>VetSalud - panel de consultas</h1>
-    <p>Persistencia políglota — MongoDB (dominio) + Redis (stock)</p>
+    <div>
+      <h1>VetSalud</h1>
+    </div>
+    <div class="sub" id="serverTime"></div>
   </header>
+
+  <nav class="tabs">
+    <button class="active" data-tab="pacientes">Pacientes y propietarios</button>
+    <button data-tab="consultas">Turnos</button>
+    <button data-tab="reportes">Reportes</button>
+    <button data-tab="stock">Stock</button>
+    <button data-tab="raw">Queries</button>
+  </nav>
+
   <main>
-    <nav>
-      <h2>Consultas de lectura</h2>
+    <!-- ============= PACIENTES Y PROPIETARIOS ============= -->
+    <section class="panel active" id="panel-pacientes">
+      <div class="bento-pacientes">
 
-      <!-- 1 - Pacientes activos con propietario -->
-      <button onclick="get('/api/pacientes-activos', '1 - Pacientes activos + propietario')">
-        1 - Pacientes activos<span class="pill mongo">Mongo</span>
-      </button>
+        <div class="stack">
+          <div class="card">
+            <h3>Ver pacientes activos<span class="pill">Q1</span></h3>
+            <p class="desc">Listado de pacientes con sus datos y los del propietario.</p>
+            <button class="action" onclick="q1()">Listar pacientes activos</button>
+          </div>
 
-      <!-- 7 - Top 5 diagnósticos -->
-      <button onclick="get('/api/top-diagnosticos', '7 - Top 5 diagnósticos')">
-        7 - Top diagnósticos<span class="pill mongo">Mongo</span>
-      </button>
+          <div class="card">
+            <h3>Propietarios inactivos<span class="pill">Q12</span></h3>
+            <p class="desc">Propietarios cuyos pacientes no tuvieron consultas en el último año.</p>
+            <button class="action ghost" onclick="q12()">Listar inactivos</button>
+          </div>
+        </div>
 
-      <!-- 8 - Stock bajo -->
-      <button onclick="get('/api/stock-bajo?umbral=50', '8 - Stock bajo (&lt; 50 unidades)')">
-        8 - Stock bajo<span class="pill redis">Redis</span>
-      </button>
+        <div class="card">
+          <h3>Alta de propietario<span class="pill">Q13</span></h3>
+          <p class="desc">Registrar un nuevo propietario.</p>
+          <div class="row"><input id="newId" placeholder="ID (ej: C007)" value="C007" /></div>
+          <div class="row">
+            <input id="newNombre" placeholder="Nombre" value="Lucía" />
+            <input id="newApellido" placeholder="Apellido" value="Vega" />
+          </div>
+          <div class="row">
+            <input id="newDni" placeholder="DNI" value="40111222" />
+            <input id="newTel" placeholder="Teléfono" value="1144" />
+          </div>
+          <div class="row"><input id="newEmail" placeholder="Email" value="lu@mail.com" /></div>
+          <div class="row">
+            <input id="newCiudad" placeholder="Ciudad" value="CABA" />
+            <input id="newProv" placeholder="Provincia" value="Buenos Aires" />
+          </div>
+          <button class="action" onclick="q13Alta()">Crear propietario</button>
+        </div>
 
-      <!-- 9 - Controles baratos -->
-      <button onclick="get('/api/controles-baratos?max=5000', '9 - Controles &lt; $5000')">
-        9 - Controles baratos<span class="pill mongo">Mongo</span>
-      </button>
+        <div class="card">
+          <h3>Modificar / dar de baja<span class="pill">Q13</span></h3>
+          <p class="desc">Modificar la ciudad o dar de baja lógica (activo=false).</p>
+          <div class="row"><input id="modId" placeholder="ID del propietario" value="C007" /></div>
+          <div class="row"><input id="modCiudad" placeholder="Nueva ciudad" value="Rosario" /></div>
+          <div class="btn-row">
+            <button class="action ghost" onclick="q13Mod()">Modificar ciudad</button>
+            <button class="action danger" onclick="q13Baja()">Baja lógica</button>
+          </div>
+        </div>
 
-      <!-- 10 - Pacientes por sucursal -->
-      <button onclick="get('/api/pacientes-sucursal?sucursal=Palermo', '10 - Pacientes de Palermo')">
-        10 - Pacientes por sucursal<span class="pill mongo">Mongo</span>
-      </button>
-
-      <!-- 11 - Ingresos por veterinario (mes actual) -->
-      <button onclick="get('/api/ingresos-vet-mes', '11 - Ingresos por vet (mes actual)')">
-        11 - Ingresos por vet<span class="pill mongo">Mongo</span>
-      </button>
-
-      <!-- 12 - Propietarios sin consultas en el último año -->
-      <button onclick="get('/api/propietarios-inactivos', '12 - Propietarios sin consultas (1 año)')">
-        12 - Propietarios inactivos<span class="pill mongo">Mongo</span>
-      </button>
-
-      <!-- 13 - ABM de propietarios -->
-      <h2 style="margin-top:24px">13 - ABM propietarios<span class="pill mongo">Mongo</span></h2>
-      <div class="row">
-        <input id="propId" placeholder="id (ej: C007)" value="C007" />
       </div>
-      <div class="row">
-        <input id="propNombre" placeholder="nombre" value="Lucía" />
-        <input id="propApellido" placeholder="apellido" value="Vega" />
-      </div>
-      <div class="row">
-        <input id="propCiudad" placeholder="ciudad" value="CABA" />
-      </div>
-      <button onclick="altaProp()">Alta propietario</button>
-      <button onclick="modProp()">Modificar (ciudad)</button>
-      <button onclick="bajaProp()">Baja lógica</button>
-
-      <!-- 14 - Alta de consulta -->
-      <h2 style="margin-top:24px">14 - Alta consulta<span class="pill mongo">Mongo</span></h2>
-      <div class="row">
-        <input id="consPac" placeholder="id_paciente" value="P002" />
-        <input id="consVet" placeholder="id_vet" value="V003" style="max-width:90px" />
-      </div>
-      <div class="row">
-        <input id="consMotivo" placeholder="motivo" value="Control" />
-      </div>
-      <div class="row">
-        <input id="consCosto" placeholder="costo" value="3000" />
-      </div>
-      <button onclick="altaCons()">Alta consulta</button>
-
-      <!-- 15 - Decrementar stock -->
-      <h2 style="margin-top:24px">15 - Decrementar stock<span class="pill redis">Redis</span></h2>
-      <div class="row">
-        <input id="prod" placeholder="id (ej: PRD001)" value="PRD001" />
-        <input id="cant" placeholder="cant." value="3" style="max-width:70px" />
-      </div>
-      <button onclick="decrementar()">Aplicar decremento</button>
-    </nav>
-    <section>
-      <div class="label" id="titulo">Elegí una consulta del panel izquierdo.</div>
-      <pre id="salida">{ }</pre>
     </section>
+
+    <!-- ============= CONSULTAS ============= -->
+    <section class="panel" id="panel-consultas">
+      <div class="grid">
+
+        <div class="card">
+          <h3>Registrar consulta<span class="pill">Q14</span></h3>
+          <p class="desc">Alta de consulta con validación de paciente y veterinario.</p>
+          <div class="row">
+            <input id="cPac" placeholder="ID paciente (ej: P002)" value="P002" />
+            <input id="cVet" placeholder="ID vet (ej: V003)" value="V003" />
+          </div>
+          <div class="row"><input id="cMotivo" placeholder="Motivo" value="Control anual" /></div>
+          <div class="row"><input id="cDiag" placeholder="Diagnóstico" value="Sano" /></div>
+          <div class="row">
+            <input id="cCosto" placeholder="Costo" value="3000" type="number" />
+            <select id="cEstado">
+              <option value="Cerrada">Cerrada</option>
+              <option value="Seguimiento">Seguimiento</option>
+              <option value="Abierta">Abierta</option>
+            </select>
+          </div>
+          <button class="action" onclick="q14()">Registrar consulta</button>
+        </div>
+
+        <div class="card">
+          <h3>Pacientes por sucursal<span class="pill">Q10</span></h3>
+          <p class="desc">Pacientes atendidos en una sucursal (vía sus veterinarios).</p>
+          <div class="row">
+            <select id="sucursal">
+              <option>Palermo</option>
+              <option>Belgrano</option>
+              <option>Caballito</option>
+              <option>Recoleta</option>
+            </select>
+          </div>
+          <button class="action ghost" onclick="q10()">Buscar</button>
+        </div>
+
+        <div class="card">
+          <h3>Controles económicos<span class="pill">Q9</span></h3>
+          <p class="desc">Consultas tipo "Control" con costo menor al umbral.</p>
+          <div class="row"><input id="maxCosto" placeholder="Costo máximo" value="5000" type="number" /></div>
+          <button class="action ghost" onclick="q9()">Buscar controles</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============= REPORTES ============= -->
+    <section class="panel" id="panel-reportes">
+      <div class="grid">
+
+        <div class="card">
+          <h3>Top 5 diagnósticos<span class="pill">Q7</span></h3>
+          <p class="desc">Diagnósticos más frecuentes en toda la base.</p>
+          <button class="action" onclick="q7()">Ver ranking</button>
+        </div>
+
+        <div class="card">
+          <h3>Ingresos por veterinario<span class="pill">Q11</span></h3>
+          <p class="desc">Total facturado por cada veterinario en el mes actual.</p>
+          <button class="action" onclick="q11()">Ver ingresos del mes</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============= STOCK ============= -->
+    <section class="panel" id="panel-stock">
+      <div class="grid">
+
+        <div class="card">
+          <h3>Stock bajo<span class="pill">Q8</span></h3>
+          <p class="desc">Productos con menos unidades que el umbral indicado.</p>
+          <div class="row"><input id="umbral" placeholder="Umbral" value="50" type="number" /></div>
+          <button class="action" onclick="q8()">Ver stock bajo</button>
+        </div>
+
+        <div class="card">
+          <h3>Decrementar stock<span class="pill">Q15</span></h3>
+          <p class="desc">Descontar unidades de un producto (consumo en consulta).</p>
+          <div class="row">
+            <input id="prodId" placeholder="ID producto (ej: PRD001)" value="PRD001" />
+            <input id="prodCant" placeholder="Cant." value="3" type="number" style="max-width:90px" />
+          </div>
+          <button class="action" onclick="q15()">Aplicar decremento</button>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ============= RAW QUERIES ============= -->
+    <section class="panel" id="panel-raw">
+      <div class="card">
+        <h3>Consultas</h3>
+        <div class="raw-list">
+          <button onclick="q1()">Query 1 - Pacientes activos<span class="pill">GET</span></button>
+          <button onclick="q7()">Query 7 - Top diagnósticos<span class="pill">GET</span></button>
+          <button onclick="q8()">Query 8 - Stock bajo<span class="pill">GET</span></button>
+          <button onclick="q9()">Query 9 - Controles &lt; $5000<span class="pill">GET</span></button>
+          <button onclick="q10()">Query 10 - Pacientes por sucursal<span class="pill">GET</span></button>
+          <button onclick="q11()">Query 11 - Ingresos vet mes actual<span class="pill">GET</span></button>
+          <button onclick="q12()">Query 12 - Propietarios inactivos<span class="pill">GET</span></button>
+          <button onclick="q13Alta()">Query 13a - Alta propietario<span class="pill">POST</span></button>
+          <button onclick="q13Mod()">Query 13b - Modificar propietario<span class="pill">PUT</span></button>
+          <button onclick="q13Baja()">Query 13c - Baja lógica propietario<span class="pill">DEL</span></button>
+          <button onclick="q14()">Query 14 - Alta consulta<span class="pill">POST</span></button>
+          <button onclick="q15()">Query 15 - Decrementar stock<span class="pill">POST</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============= RESULTS ============= -->
+    <div id="results">
+      <div class="head">
+        <div>
+          <h2 id="resTitle">Resultados</h2>
+        </div>
+        <button class="toggle-json" id="toggleJson" onclick="toggleJson()" style="display:none">Ver JSON</button>
+      </div>
+      <div class="body" id="resBody">
+        <div class="empty">Sin datos cargados.</div>
+      </div>
+    </div>
   </main>
 
   <script>
-    const salida = document.getElementById('salida');
-    const titulo = document.getElementById('titulo');
-    const v = (id) => document.getElementById(id).value.trim();
+    // ---------------- Result helpers (defined first because tab switch resets them) ----------------
+    const resTitle = document.getElementById('resTitle');
+    const resMeta = document.getElementById('resMeta');
+    const resBody = document.getElementById('resBody');
+    const toggleBtn = document.getElementById('toggleJson');
+    let lastRawJson = null;
+    let rawMode = false;
 
-    function render(title, data) {
-      titulo.innerHTML = title;
-      salida.textContent = JSON.stringify(data, null, 2);
+    function resetResults() {
+      resTitle.textContent = 'Resultados';
+      resMeta.textContent = 'Elegí una acción del panel.';
+      resBody.innerHTML = '<div class="empty">Sin datos cargados.</div>';
+      toggleBtn.style.display = 'none';
+      lastRawJson = null;
     }
 
-    async function get(url, title) {
-      titulo.textContent = 'Cargando…';
+    // ---------------- Tab switching ----------------
+    document.querySelectorAll('nav.tabs button').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+        rawMode = btn.dataset.tab === 'raw';
+        resetResults();
+      };
+    });
+
+    function toggleJson() {
+      const pre = document.querySelector('#resBody pre.json');
+      const renderedBlocks = document.querySelectorAll('#resBody .rendered');
+      if (!pre) return;
+      pre.classList.toggle('hidden');
+      const hidden = pre.classList.contains('hidden');
+      renderedBlocks.forEach(el => el.style.display = hidden ? '' : 'none');
+      toggleBtn.textContent = hidden ? 'Ver JSON' : 'Ver tabla';
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    // Prettify a flattened column key:
+    //  - "_id"            -> "ID"
+    //  - "id_paciente"    -> "ID paciente"
+    //  - "paciente.nombre" -> {parent: "Paciente", sub: "Nombre"}  -> HTML with parent + small subkey
+    function prettyKey(k) {
+      const parts = k.split('.');
+      const normalize = (s) => {
+        if (s === '_id') return 'ID';
+        // id_xxx -> ID xxx
+        const m = s.match(/^id_(.+)$/);
+        if (m) return 'ID ' + m[1];
+        // snake_case / kebab-case -> spaces
+        const spaced = s.replace(/[_-]+/g, ' ');
+        // capitalize first letter
+        return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+      };
+      const last = normalize(parts[parts.length - 1]);
+      if (parts.length === 1) return escapeHtml(last);
+      const parents = parts.slice(0, -1).map(normalize).join(' · ');
+      return `${escapeHtml(parents)}<span class="sub-key">${escapeHtml(last)}</span>`;
+    }
+
+    function fmtVal(v) {
+      if (v == null) return '<span style="color:#aaa">—</span>';
+      if (typeof v === 'boolean') {
+        return `<span class="badge ${v ? 'activo' : 'inactivo'}">${v ? 'activo' : 'inactivo'}</span>`;
+      }
+      if (typeof v === 'number') return `<span class="num">${v.toLocaleString('es-AR')}</span>`;
+      if (typeof v === 'object') {
+        if (v.$date) return new Date(v.$date).toLocaleDateString('es-AR');
+        return escapeHtml(JSON.stringify(v));
+      }
+      if (/^\d{4}-\d{2}-\d{2}T/.test(v)) {
+        return new Date(v).toLocaleString('es-AR');
+      }
+      return escapeHtml(v);
+    }
+
+    function flatten(obj, prefix = '') {
+      const out = {};
+      for (const [k, v] of Object.entries(obj || {})) {
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && !v.$date) {
+          Object.assign(out, flatten(v, key));
+        } else {
+          out[key] = v;
+        }
+      }
+      return out;
+    }
+
+    function renderTable(rows) {
+      if (!Array.isArray(rows) || rows.length === 0) {
+        return '<div class="empty">Sin resultados.</div>';
+      }
+      const flat = rows.map(r => flatten(r));
+      const cols = [...new Set(flat.flatMap(r => Object.keys(r)))];
+      const thead = '<tr>' + cols.map(c => `<th>${prettyKey(c)}</th>`).join('') + '</tr>';
+      const tbody = flat.map(r =>
+        '<tr>' + cols.map(c => `<td>${fmtVal(r[c])}</td>`).join('') + '</tr>'
+      ).join('');
+      return `<table class="data"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+    }
+
+    function renderObject(obj) {
+      if (obj && obj.ok) {
+        const detalle = Object.entries(obj).filter(([k]) => k !== 'ok')
+          .map(([k, v]) => `<div><strong>${prettyKey(k)}:</strong> ${fmtVal(v)}</div>`).join('');
+        return `<div class="success-msg">Operación exitosa</div>${detalle}`;
+      }
+      if (obj && obj.error) {
+        return `<div class="error-msg">${escapeHtml(obj.error)}</div>`;
+      }
+      return renderTable([obj]);
+    }
+
+    function show(title, data) {
+      resTitle.textContent = title;
+      lastRawJson = data;
+      let renderedHtml;
+      if (Array.isArray(data)) {
+        resMeta.textContent = `${data.length} resultado${data.length === 1 ? '' : 's'}`;
+        renderedHtml = renderTable(data);
+      } else {
+        resMeta.textContent = '';
+        renderedHtml = renderObject(data);
+      }
+      const jsonStr = JSON.stringify(data, null, 2);
+      // If in raw mode (raw tab), show JSON by default; otherwise show rendered.
+      if (rawMode) {
+        resBody.innerHTML =
+          `<div class="rendered" style="display:none">${renderedHtml}</div>` +
+          `<pre class="json">${escapeHtml(jsonStr)}</pre>`;
+        toggleBtn.textContent = 'Ver tabla';
+      } else {
+        resBody.innerHTML =
+          `<div class="rendered">${renderedHtml}</div>` +
+          `<pre class="json hidden">${escapeHtml(jsonStr)}</pre>`;
+        toggleBtn.textContent = 'Ver JSON';
+      }
+      toggleBtn.style.display = 'inline-block';
+    }
+
+    function showError(title, msg) {
+      resTitle.textContent = title;
+      resMeta.textContent = 'Error';
+      resBody.innerHTML = `<div class="error-msg">${escapeHtml(msg)}</div>`;
+      toggleBtn.style.display = 'none';
+    }
+
+    // ---------------- Fetch helpers ----------------
+    async function api(method, url, body) {
+      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(url, opts);
+      return res.json();
+    }
+
+    async function run(title, method, url, body) {
+      resTitle.textContent = title;
+      resMeta.textContent = 'Cargando…';
+      resBody.innerHTML = '<div class="empty">Cargando…</div>';
+      toggleBtn.style.display = 'none';
       try {
-        const res = await fetch(url);
-        render(title, await res.json());
+        show(title, await api(method, url, body));
       } catch (e) {
-        render(title, { error: e.message });
+        showError(title, e.message);
       }
     }
 
-    async function send(method, url, body, title) {
-      try {
-        const res = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: body ? JSON.stringify(body) : undefined,
-        });
-        render(title, await res.json());
-      } catch (e) {
-        render(title, { error: e.message });
-      }
-    }
+    const v = id => document.getElementById(id).value.trim();
 
-    // 13 - ABM propietarios
-    function altaProp() {
-      send('POST', '/api/propietarios', {
-        _id: v('propId'),
-        nombre: v('propNombre'),
-        apellido: v('propApellido'),
-        ciudad: v('propCiudad'),
-      }, `13 - Alta propietario ${v('propId')}`);
-    }
-    function modProp() {
-      send('PUT', `/api/propietarios/${v('propId')}`, { ciudad: v('propCiudad') },
-        `13 - Modificar propietario ${v('propId')}`);
-    }
-    function bajaProp() {
-      send('DELETE', `/api/propietarios/${v('propId')}`, null,
-        `13 - Baja lógica propietario ${v('propId')}`);
-    }
+    // ---------------- Query handlers ----------------
+    function q1()  { run('Pacientes activos + propietario', 'GET', '/api/pacientes-activos'); }
+    function q7()  { run('Top 5 diagnósticos', 'GET', '/api/top-diagnosticos'); }
+    function q8()  { run(`Stock bajo (< ${v('umbral')} unidades)`, 'GET', `/api/stock-bajo?umbral=${v('umbral')}`); }
+    function q9()  { run(`Controles con costo < $${v('maxCosto')}`, 'GET', `/api/controles-baratos?max=${v('maxCosto')}`); }
+    function q10() { run(`Pacientes de la sucursal ${v('sucursal')}`, 'GET', `/api/pacientes-sucursal?sucursal=${encodeURIComponent(v('sucursal'))}`); }
+    function q11() { run('Ingresos por veterinario - mes actual', 'GET', '/api/ingresos-vet-mes'); }
+    function q12() { run('Propietarios sin consultas en el último año', 'GET', '/api/propietarios-inactivos'); }
 
-    // 14 - Alta consulta
-    function altaCons() {
-      send('POST', '/api/consultas', {
-        id_paciente: v('consPac'),
-        id_vet: v('consVet'),
-        motivo: v('consMotivo'),
-        costo: Number(v('consCosto')),
-      }, '14 - Alta de consulta');
+    function q13Alta() {
+      run(`Alta propietario ${v('newId')}`, 'POST', '/api/propietarios', {
+        _id: v('newId'),
+        nombre: v('newNombre'), apellido: v('newApellido'),
+        dni: v('newDni'), telefono: v('newTel'),
+        email: v('newEmail'),
+        ciudad: v('newCiudad'), provincia: v('newProv'),
+      });
     }
-
-    // 15 - Decrementar stock
-    function decrementar() {
-      const id_producto = v('prod');
-      const cantidad = Number(v('cant'));
-      send('POST', '/api/decrementar-stock', { id_producto, cantidad },
-        `15 - Decremento de ${id_producto} (-${cantidad})`);
+    function q13Mod() {
+      run(`Modificar propietario ${v('modId')}`, 'PUT', `/api/propietarios/${v('modId')}`, {
+        ciudad: v('modCiudad'),
+      });
+    }
+    function q13Baja() {
+      run(`Baja lógica propietario ${v('modId')}`, 'DELETE', `/api/propietarios/${v('modId')}`);
+    }
+    function q14() {
+      run('Alta de consulta', 'POST', '/api/consultas', {
+        id_paciente: v('cPac'), id_vet: v('cVet'),
+        motivo: v('cMotivo'), diagnostico: v('cDiag'),
+        costo: Number(v('cCosto')),
+        estado: v('cEstado'),
+      });
+    }
+    function q15() {
+      run(`Decremento de ${v('prodId')} (-${v('prodCant')})`, 'POST', '/api/decrementar-stock', {
+        id_producto: v('prodId'),
+        cantidad: Number(v('prodCant')),
+      });
     }
   </script>
 </body>
