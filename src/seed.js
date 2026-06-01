@@ -50,11 +50,13 @@ async function main() {
     activo: bool(r.activo),
   }));
 
+  // Tipos: 'Consulta' (sinónimo de control/controles) y 'Cirugia'
   const consultas = readCsv('consultas.csv').map((r) => ({
     _id: r.id_consulta,
     id_paciente: r.id_paciente,
     id_vet: r.id_vet,
     fecha: new Date(r.fecha),
+    tipo: r.tipo || 'Consulta',
     motivo: r.motivo,
     diagnostico: r.diagnostico,
     costo: Number(r.costo),

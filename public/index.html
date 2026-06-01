@@ -217,20 +217,27 @@
 
         <div class="card">
           <h3>Registrar consulta<span class="pill">Q14</span></h3>
-          <p class="desc">Alta de consulta con validación de paciente y veterinario.</p>
+          <p class="desc">Alta de consulta o cirugía. Valida que paciente y veterinario existan y estén activos. Opcionalmente descuenta stock.</p>
           <div class="row">
             <input id="cPac" placeholder="ID paciente (ej: P002)" value="P002" />
             <input id="cVet" placeholder="ID vet (ej: V003)" value="V003" />
           </div>
-          <div class="row"><input id="cMotivo" placeholder="Motivo" value="Control anual" /></div>
-          <div class="row"><input id="cDiag" placeholder="Diagnóstico" value="Sano" /></div>
           <div class="row">
-            <input id="cCosto" placeholder="Costo" value="3000" type="number" />
+            <select id="cTipo">
+              <option value="Consulta">Consulta (incluye Control)</option>
+              <option value="Cirugia">Cirugía</option>
+            </select>
             <select id="cEstado">
               <option value="Cerrada">Cerrada</option>
               <option value="Seguimiento">Seguimiento</option>
               <option value="Abierta">Abierta</option>
             </select>
+          </div>
+          <div class="row"><input id="cMotivo" placeholder="Motivo" value="Control anual" /></div>
+          <div class="row"><input id="cDiag" placeholder="Diagnóstico" value="Sano" /></div>
+          <div class="row"><input id="cCosto" placeholder="Costo" value="3000" type="number" /></div>
+          <div class="row">
+            <input id="cProductos" placeholder="Productos usados (ej: PRD001:2, PRD003:1)" />
           </div>
           <button class="action" onclick="q14()">Registrar consulta</button>
         </div>
@@ -540,13 +547,26 @@
     function q13Baja() {
       run(`Baja lógica propietario ${v('modId')}`, 'DELETE', `/api/propietarios/${v('modId')}`);
     }
+    function parseProductos(raw) {
+      // Acepta formato "PRD001:2, PRD003:1" y devuelve [{id_producto, cantidad}]
+      if (!raw) return [];
+      return raw.split(',').map(s => s.trim()).filter(Boolean).map(part => {
+        const [id, cant] = part.split(':').map(x => x.trim());
+        return { id_producto: id, cantidad: Number(cant) || 1 };
+      });
+    }
+
     function q14() {
-      run('Alta de consulta', 'POST', '/api/consultas', {
+      const body = {
         id_paciente: v('cPac'), id_vet: v('cVet'),
+        tipo: v('cTipo'),
         motivo: v('cMotivo'), diagnostico: v('cDiag'),
         costo: Number(v('cCosto')),
         estado: v('cEstado'),
-      });
+      };
+      const productos = parseProductos(v('cProductos'));
+      if (productos.length) body.productos_usados = productos;
+      run('Alta de consulta', 'POST', '/api/consultas', body);
     }
     function q15() {
       run(`Decremento de ${v('prodId')} (-${v('prodCant')})`, 'POST', '/api/decrementar-stock', {
