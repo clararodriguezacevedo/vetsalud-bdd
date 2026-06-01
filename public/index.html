@@ -591,7 +591,17 @@
     function renderObject(obj) {
       if (obj && obj.ok) {
         const detalle = Object.entries(obj).filter(([k]) => k !== 'ok')
-          .map(([k, v]) => `<div><strong>${prettyKey(k)}:</strong> ${fmtVal(v)}</div>`).join('');
+          .map(([k, v]) => {
+            // Array de objetos -> tabla
+            if (Array.isArray(v) && v.length && typeof v[0] === 'object') {
+              return `<div style="margin-top:10px"><strong>${prettyKey(k)}</strong>${renderTable(v)}</div>`;
+            }
+            // Objeto -> tabla
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+              return `<div style="margin-top:10px"><strong>${prettyKey(k)}</strong>${renderTable([v])}</div>`;
+            }
+            return `<div><strong>${prettyKey(k)}:</strong> ${fmtVal(v)}</div>`;
+          }).join('');
         return `<div class="success-msg">Operación exitosa</div>${detalle}`;
       }
       if (obj && obj.error) {

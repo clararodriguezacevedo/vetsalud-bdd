@@ -278,17 +278,25 @@ export async function altaConsulta(consulta) {
   if (!vet) throw new Error(`El veterinario ${id_vet} no existe`);
   if (!vet.activo) throw new Error(`El veterinario ${id_vet} no está activo`);
 
-  // Validación del stock en Redis
-  const productos = Array.isArray(productos_usados) ? productos_usados : [];
+  // Consolidar las filas repetidas
+  const consolidado = new Map();
+  for (const p of (Array.isArray(productos_usados) ? productos_usados : [])) {
+    if (!p?.id_producto) continue;
+    const cant = Math.abs(Number(p.cantidad)) || 0;
+    if (cant <= 0) continue;
+    consolidado.set(p.id_producto, (consolidado.get(p.id_producto) || 0) + cant);
+  }
+  const productos = [...consolidado].map(([id_producto, cantidad]) => ({ id_producto, cantidad }));
+
+  // Validación del stock en Redis 
   for (const p of productos) {
     const key = `producto:${p.id_producto}`;
     if (!(await redis.exists(key))) {
       throw new Error(`El producto ${p.id_producto} no existe`);
     }
     const actual = Number(await redis.hGet(key, 'unidades'));
-    const requerido = Math.abs(Number(p.cantidad));
-    if (actual < requerido) {
-      throw new Error(`Stock insuficiente para ${p.id_producto}: ${actual} disponibles, ${requerido} solicitadas`);
+    if (actual < p.cantidad) {
+      throw new Error(`Stock insuficiente para ${p.id_producto}: ${actual} disponibles, ${p.cantidad} solicitadas`);
     }
   }
 
