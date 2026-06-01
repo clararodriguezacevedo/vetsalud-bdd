@@ -27,7 +27,7 @@ async function main() {
     telefono: r.telefono,
     ciudad: r.ciudad,
     provincia: r.provincia,
-    activo: true, // campo agregado para la baja lógica 
+    activo: r.activo === undefined ? true : bool(r.activo),
   }));
 
   const pacientes = readCsv('pacientes.csv').map((r) => ({

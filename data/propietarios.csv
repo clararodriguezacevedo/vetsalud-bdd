@@ -1,7 +1,19 @@
-id_propietario,nombre,apellido,dni,email,telefono,ciudad,provincia
-C001,Ana,Rodríguez,30456789,ana@gmail.com,1145001234,Buenos Aires,Buenos Aires
-C002,Roberto,Díaz,27654321,rob@gmail.com,1156002345,Rosario,Santa Fe
-C003,Valentina,Molina,41234567,vale@gmail.com,1167003456,Córdoba,Córdoba
-C004,Diego,Herrera,35789012,diego@gmail.com,1178004567,Mendoza,Mendoza
-C005,Paula,Sosa,38012345,paula@gmail.com,1189005678,La Plata,Buenos Aires
-C006,Tomás,Juárez,42345678,tomas@gmail.com,1190006789,Salta,Salta
+id_propietario,nombre,apellido,dni,email,telefono,ciudad,provincia,activo
+C001,Ana,Rodríguez,30456789,ana@gmail.com,1145001234,Buenos Aires,Buenos Aires,True
+C002,Roberto,Díaz,27654321,rob@gmail.com,1156002345,Rosario,Santa Fe,True
+C003,Valentina,Molina,41234567,vale@gmail.com,1167003456,Córdoba,Córdoba,True
+C004,Diego,Herrera,35789012,diego@gmail.com,1178004567,Mendoza,Mendoza,True
+C005,Paula,Sosa,38012345,paula@gmail.com,1189005678,La Plata,Buenos Aires,True
+C006,Tomás,Juárez,42345678,tomas@gmail.com,1190006789,Salta,Salta,True
+C007,Lucía,Vega,40111222,lu@gmail.com,1144222333,CABA,Buenos Aires,True
+C008,Federico,Russo,29876543,fede@gmail.com,1133344455,Mar del Plata,Buenos Aires,True
+C009,Sofía,Méndez,39555666,sofi@gmail.com,1122334455,San Miguel de Tucumán,Tucumán,True
+C010,Martín,Acosta,28111000,martin@gmail.com,1199887766,Bahía Blanca,Buenos Aires,False
+C011,Camila,Ortiz,41888999,cami@gmail.com,1166778899,Neuquén,Neuquén,True
+C012,Joaquín,Pereyra,33444555,joaco@gmail.com,1155667788,Mendoza,Mendoza,True
+C013,Florencia,Núñez,37222111,flor@gmail.com,1144556677,Córdoba,Córdoba,True
+C014,Nicolás,Romero,30999888,nico@gmail.com,1133445566,Salta,Salta,True
+C015,Agustina,Torres,42777666,agus@gmail.com,1122113344,La Plata,Buenos Aires,True
+C016,Sebastián,Vargas,31555444,seba@gmail.com,1199223344,Rosario,Santa Fe,True
+C017,Patricia,Ledesma,36333222,paty@gmail.com,1144998877,Mar del Plata,Buenos Aires,True
+C018,Diego,Vázquez,34111222,dvazquez@gmail.com,1155441122,Resistencia,Chaco,True

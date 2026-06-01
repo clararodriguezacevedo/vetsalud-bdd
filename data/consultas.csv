@@ -1,9 +1,30 @@
-id_consulta,id_paciente,id_vet,fecha,motivo,diagnostico,costo,estado
-CON001,P001,V001,2025-10-05,Control anual,Sano,4500,Cerrada
-CON002,P002,V003,2025-10-12,Alergia cutánea,Dermatitis atópica,6200,Cerrada
-CON003,P003,V002,2025-09-20,Fractura pata,Fractura radio,15000,Cerrada
-CON004,P004,V001,2025-11-01,Pérdida de apetito,Estrés ambiental,3800,Seguimiento
-CON005,P005,V005,2025-11-10,Vómitos recurrentes,Gastritis,5500,Seguimiento
-CON006,P006,V003,2025-11-18,Revisión piel,Eccema,4100,Cerrada
-CON007,P001,V001,2025-12-02,Control post-vacuna,Sin novedades,2000,Cerrada
-CON008,P007,V002,2025-12-10,Extracción dentaria,Periodontitis,12000,Cerrada
+id_consulta,id_paciente,id_vet,fecha,tipo,motivo,diagnostico,costo,estado
+CON001,P001,V001,2025-10-05,Consulta,Control anual,Sano,4500,Cerrada
+CON002,P002,V003,2025-10-12,Consulta,Alergia cutánea,Dermatitis atópica,6200,Cerrada
+CON003,P003,V002,2025-09-20,Cirugia,Fractura pata,Fractura radio,15000,Cerrada
+CON004,P004,V001,2025-11-01,Consulta,Pérdida de apetito,Estrés ambiental,3800,Seguimiento
+CON005,P005,V005,2025-11-10,Consulta,Vómitos recurrentes,Gastritis,5500,Seguimiento
+CON006,P006,V003,2025-11-18,Consulta,Revisión piel,Eccema,4100,Cerrada
+CON007,P001,V001,2025-12-02,Consulta,Control post-vacuna,Sin novedades,2000,Cerrada
+CON008,P007,V002,2025-12-10,Cirugia,Extracción dentaria,Periodontitis,12000,Cerrada
+CON009,P001,V003,2026-05-12,Consulta,Picazón persistente,Dermatitis atópica,5500,Cerrada
+CON010,P002,V005,2026-05-10,Consulta,Vómitos recurrentes,Gastritis,5800,Seguimiento
+CON011,P004,V001,2026-05-15,Consulta,Control mensual,Sano,2500,Cerrada
+CON012,P005,V002,2026-05-18,Cirugia,Esterilización,Cirugía exitosa,18000,Cerrada
+CON013,P006,V003,2026-05-20,Consulta,Picazón en orejas,Otitis externa,3800,Cerrada
+CON014,P007,V006,2026-05-22,Cirugia,Tumor cutáneo,Resección de masa,25000,Cerrada
+CON015,P008,V007,2026-05-25,Consulta,Plumas decaídas,Carencia nutricional,4200,Seguimiento
+CON016,P009,V001,2026-05-26,Consulta,Pulgas y picazón,Infestación parasitaria,3200,Cerrada
+CON017,P010,V003,2026-05-27,Consulta,Sacudidas de cabeza,Otitis externa,3900,Cerrada
+CON018,P012,V005,2026-05-28,Consulta,Control bucal,Sano,2800,Cerrada
+CON019,P013,V001,2026-05-29,Consulta,Lamido excesivo,Dermatitis atópica,5200,Cerrada
+CON020,P014,V006,2026-05-29,Cirugia,Cataratas,Cirugía oftalmológica,32000,Cerrada
+CON021,P015,V012,2026-05-30,Cirugia,Hernia inguinal,Hernia reparada,14000,Cerrada
+CON022,P016,V003,2026-05-30,Consulta,Rascado intenso,Infestación parasitaria,3500,Cerrada
+CON023,P017,V001,2026-05-31,Consulta,Otitis,Otitis externa,4100,Cerrada
+CON024,P011,V004,2024-08-15,Consulta,Pérdida de peso,Gastritis crónica,6000,Cerrada
+CON025,P011,V004,2024-12-10,Consulta,Control trimestral,Sin novedades,3200,Cerrada
+CON026,P018,V005,2025-08-12,Consulta,Control anual,Sano,3000,Cerrada
+CON027,P019,V010,2026-02-20,Consulta,Pico desgastado,Mala alimentación,4500,Seguimiento
+CON028,P022,V006,2026-04-15,Cirugia,Hernia umbilical,Hernia reparada,11000,Cerrada
+CON029,P020,V001,2025-09-22,Consulta,Control inicial,Sano,3800,Cerrada
