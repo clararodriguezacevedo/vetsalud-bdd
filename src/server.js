@@ -24,11 +24,20 @@ app.get('/api/pacientes-activos', wrap(() => q.pacientesActivosConPropietario())
 // 7 - Top 5 diagnósticos
 app.get('/api/top-diagnosticos', wrap(() => q.topDiagnosticos()));
 
+const positiveParam = (raw, def, name) => {
+  if (raw === undefined || raw === '') return def;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) {
+    throw new Error(`El parámetro '${name}' debe ser un número positivo`);
+  }
+  return n;
+};
+
 // 8 - Stock bajo
-app.get('/api/stock-bajo', wrap((req) => q.stockBajo(Number(req.query.umbral) || 50)));
+app.get('/api/stock-bajo', wrap((req) => q.stockBajo(positiveParam(req.query.umbral, 50, 'umbral'))));
 
 // 9 - Controles con costo menor a 5000
-app.get('/api/controles-baratos', wrap((req) => q.controlesBaratos(Number(req.query.max) || 5000)));
+app.get('/api/controles-baratos', wrap((req) => q.controlesBaratos(positiveParam(req.query.max, 5000, 'max'))));
 
 // 10 - Pacientes de una sucursal
 app.get('/api/pacientes-sucursal', wrap((req) => q.pacientesPorSucursal(req.query.sucursal || 'Palermo')));

@@ -139,7 +139,48 @@
     .error-msg { background: #fbeaea; color: #993333; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 500; }
     .badge.activo { background: var(--accent-soft); color: var(--accent-dark); }
-    .badge.inactivo { background: #f0f0f0; color: var(--muted); }
+    .badge.inactivo { background: #fbeaea; color: #993333; }
+
+    /* Form fields with labels */
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; min-width: 0; }
+    .field label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+    .field input, .field select {
+      padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+      font-size: 13px; font-family: inherit; min-width: 0; background: #fff;
+    }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+    .row .field { flex: 1; margin-bottom: 0; }
+
+    /* Info banner */
+    .info-card {
+      background: var(--accent-soft); border: 1px solid #c4e3d6; border-radius: 10px;
+      padding: 14px 18px; margin-bottom: 16px; font-size: 13px; color: var(--accent-dark);
+    }
+    .info-card h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
+    .info-card p { margin: 6px 0; line-height: 1.5; }
+    .info-card .badge { margin-right: 4px; }
+
+    /* Productos dynamic list */
+    .producto-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .producto-row input {
+      padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
+      font-size: 13px; font-family: inherit; min-width: 0; background: #fff;
+    }
+    .producto-row .prod-id { flex: 1; }
+    .producto-row .prod-cant { width: 70px; flex-shrink: 0; }
+    .btn-icon {
+      width: 28px; height: 28px; border: 1px solid var(--line); background: #fff;
+      border-radius: 6px; cursor: pointer; color: var(--muted); padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1; flex-shrink: 0; font-family: inherit;
+    }
+    .btn-icon:hover { background: #fbeaea; color: #b94a4a; border-color: #e9c8c8; }
+    .btn-add {
+      width: 100%; background: #fff; border: 1px dashed var(--line); color: var(--muted);
+      padding: 7px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit;
+      margin-bottom: 10px; font-weight: 500;
+    }
+    .btn-add:hover { border-color: var(--accent); color: var(--accent-dark); }
   </style>
 </head>
 <body>
@@ -161,6 +202,24 @@
   <main>
     <!-- ============= PACIENTES Y PROPIETARIOS ============= -->
     <section class="panel active" id="panel-pacientes">
+      <div class="info-card">
+        <h4>Cómo distinguir los tres casos parecidos</h4>
+        <p><strong>1. Propietario dado de baja</strong> <span class="badge inactivo">activo: false</span>
+          — ya no es cliente. Su historial se preserva pero no aparece en operaciones nuevas
+          (Q14 rechaza consultas para él) ni en Q12 (no tiene sentido marcar como "inactivo" a alguien
+          que ya está dado de baja).</p>
+        <p><strong>2. Propietario sin mascotas</strong> <span class="badge activo">activo: true</span>,
+          0 pacientes — cliente vigente que no tiene ningún animal registrado. En Q12 aparece con
+          <code>cantidad_mascotas: 0</code>.</p>
+        <p><strong>3. Propietario con mascotas pero sin consultas recientes</strong>
+          <span class="badge activo">activo: true</span>, ≥1 paciente, sin atenciones en el último año
+          — el "cliente perdido" típico. En Q12 aparece con <code>cantidad_mascotas &gt; 0</code>.</p>
+        <p style="margin-top:10px"><strong>Sobre pacientes:</strong> <code>activo</code> es independiente
+          del estado del propietario. Una baja lógica de propietario no propaga a sus pacientes (Toto
+          puede seguir como paciente activo aunque su dueño se haya dado de baja). No hay ABM
+          de pacientes en este proyecto.</p>
+      </div>
+
       <div class="bento-pacientes">
 
         <div class="stack">
@@ -180,31 +239,70 @@
         <div class="card">
           <h3>Alta de propietario<span class="pill">Q13</span></h3>
           <p class="desc">Registrar un nuevo propietario.</p>
-          <div class="row"><input id="newId" placeholder="ID (ej: C007)" value="C007" /></div>
-          <div class="row">
-            <input id="newNombre" placeholder="Nombre" value="Lucía" />
-            <input id="newApellido" placeholder="Apellido" value="Vega" />
+          <div class="field">
+            <label for="newId">ID del propietario</label>
+            <input id="newId" placeholder="C007" value="C007" />
           </div>
           <div class="row">
-            <input id="newDni" placeholder="DNI" value="40111222" />
-            <input id="newTel" placeholder="Teléfono" value="1144" />
+            <div class="field">
+              <label for="newNombre">Nombre</label>
+              <input id="newNombre" placeholder="Lucía" value="Lucía" />
+            </div>
+            <div class="field">
+              <label for="newApellido">Apellido</label>
+              <input id="newApellido" placeholder="Vega" value="Vega" />
+            </div>
           </div>
-          <div class="row"><input id="newEmail" placeholder="Email" value="lu@mail.com" /></div>
           <div class="row">
-            <input id="newCiudad" placeholder="Ciudad" value="CABA" />
-            <input id="newProv" placeholder="Provincia" value="Buenos Aires" />
+            <div class="field">
+              <label for="newDni">DNI</label>
+              <input id="newDni" placeholder="40111222" value="40111222" />
+            </div>
+            <div class="field">
+              <label for="newTel">Teléfono</label>
+              <input id="newTel" placeholder="1144 222 333" value="1144222333" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="newEmail">Email</label>
+            <input id="newEmail" placeholder="lu@mail.com" value="lu@mail.com" />
+          </div>
+          <div class="row">
+            <div class="field">
+              <label for="newCiudad">Ciudad</label>
+              <input id="newCiudad" placeholder="CABA" value="CABA" />
+            </div>
+            <div class="field">
+              <label for="newProv">Provincia</label>
+              <input id="newProv" placeholder="Buenos Aires" value="Buenos Aires" />
+            </div>
           </div>
           <button class="action" onclick="q13Alta()">Crear propietario</button>
         </div>
 
-        <div class="card">
-          <h3>Modificar / dar de baja<span class="pill">Q13</span></h3>
-          <p class="desc">Modificar la ciudad o dar de baja lógica (activo=false).</p>
-          <div class="row"><input id="modId" placeholder="ID del propietario" value="C007" /></div>
-          <div class="row"><input id="modCiudad" placeholder="Nueva ciudad" value="Rosario" /></div>
-          <div class="btn-row">
+        <div class="stack">
+          <div class="card">
+            <h3>Modificar propietario<span class="pill">Q13</span></h3>
+            <p class="desc">Actualizar la ciudad de un propietario existente.</p>
+            <div class="field">
+              <label for="modId">ID del propietario</label>
+              <input id="modId" placeholder="C007" value="C007" />
+            </div>
+            <div class="field">
+              <label for="modCiudad">Nueva ciudad</label>
+              <input id="modCiudad" placeholder="Rosario" value="Rosario" />
+            </div>
             <button class="action ghost" onclick="q13Mod()">Modificar ciudad</button>
-            <button class="action danger" onclick="q13Baja()">Baja lógica</button>
+          </div>
+
+          <div class="card">
+            <h3>Baja lógica<span class="pill">Q13</span></h3>
+            <p class="desc">Marcar al propietario como inactivo. Sus pacientes se conservan.</p>
+            <div class="field">
+              <label for="bajaId">ID del propietario</label>
+              <input id="bajaId" placeholder="C007" value="C007" />
+            </div>
+            <button class="action danger" onclick="q13Baja()">Dar de baja</button>
           </div>
         </div>
 
@@ -219,38 +317,62 @@
           <h3>Registrar consulta<span class="pill">Q14</span></h3>
           <p class="desc">Alta de consulta o cirugía. Valida que paciente y veterinario existan y estén activos. Opcionalmente descuenta stock.</p>
           <div class="row">
-            <input id="cPac" placeholder="ID paciente (ej: P002)" value="P002" />
-            <input id="cVet" placeholder="ID vet (ej: V003)" value="V003" />
+            <div class="field">
+              <label for="cPac">ID paciente</label>
+              <input id="cPac" placeholder="P002" value="P002" />
+            </div>
+            <div class="field">
+              <label for="cVet">ID veterinario</label>
+              <input id="cVet" placeholder="V003" value="V003" />
+            </div>
           </div>
           <div class="row">
-            <select id="cTipo">
-              <option value="Consulta">Consulta/Control</option>
-              <option value="Cirugia">Cirugía</option>
-            </select>
-            <select id="cEstado">
-              <option value="Cerrada">Cerrada</option>
-              <option value="Seguimiento">Seguimiento</option>
-              <option value="Abierta">Abierta</option>
-            </select>
+            <div class="field">
+              <label for="cTipo">Tipo</label>
+              <select id="cTipo">
+                <option value="Consulta">Consulta / Control</option>
+                <option value="Cirugia">Cirugía</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="cEstado">Estado</label>
+              <select id="cEstado">
+                <option value="Cerrada">Cerrada</option>
+                <option value="Seguimiento">Seguimiento</option>
+              </select>
+            </div>
           </div>
-          <div class="row"><input id="cMotivo" placeholder="Motivo" value="Control anual" /></div>
-          <div class="row"><input id="cDiag" placeholder="Diagnóstico" value="Sano" /></div>
-          <div class="row"><input id="cCosto" placeholder="Costo" value="3000" type="number" /></div>
-          <div class="row">
-            <input id="cProductos" placeholder="Productos usados (ej: PRD001:2, PRD003:1)" />
+          <div class="field">
+            <label for="cMotivo">Motivo de la consulta</label>
+            <input id="cMotivo" placeholder="Control anual, fractura, etc." value="Control anual" />
+          </div>
+          <div class="field">
+            <label for="cDiag">Diagnóstico</label>
+            <input id="cDiag" placeholder="Sano, dermatitis, etc." value="Sano" />
+          </div>
+          <div class="field">
+            <label for="cCosto">Costo ($)</label>
+            <input id="cCosto" placeholder="3000" value="3000" type="number" min="0" />
+          </div>
+          <div class="field">
+            <label>Productos usados (opcional)</label>
+            <div id="productosLista"></div>
+            <button type="button" class="btn-add" onclick="addProductoRow()">+ Agregar producto</button>
           </div>
           <button class="action" onclick="q14()">Registrar consulta</button>
         </div>
 
         <div class="card">
           <h3>Pacientes por sucursal<span class="pill">Q10</span></h3>
-          <p class="desc">Pacientes atendidos en una sucursal (vía sus veterinarios).</p>
-          <div class="row">
+          <p class="desc">Pacientes atendidos en una sucursal (vía consultas o vacunaciones de los vets de esa sucursal). Un paciente atendido en varias sucursales aparece en cada una.</p>
+          <div class="field">
+            <label for="sucursal">Sucursal</label>
             <select id="sucursal">
               <option>Palermo</option>
               <option>Belgrano</option>
               <option>Caballito</option>
               <option>Recoleta</option>
+              <option>Núñez</option>
             </select>
           </div>
           <button class="action ghost" onclick="q10()">Buscar</button>
@@ -258,8 +380,11 @@
 
         <div class="card">
           <h3>Controles económicos<span class="pill">Q9</span></h3>
-          <p class="desc">Consultas tipo "Control" con costo menor al umbral.</p>
-          <div class="row"><input id="maxCosto" placeholder="Costo máximo" value="5000" type="number" /></div>
+          <p class="desc">Consultas tipo "Control" con costo menor al umbral. El umbral debe ser positivo.</p>
+          <div class="field">
+            <label for="maxCosto">Costo máximo ($)</label>
+            <input id="maxCosto" placeholder="5000" value="5000" type="number" min="1" />
+          </div>
           <button class="action ghost" onclick="q9()">Buscar controles</button>
         </div>
 
@@ -291,17 +416,26 @@
 
         <div class="card">
           <h3>Stock bajo<span class="pill">Q8</span></h3>
-          <p class="desc">Productos con menos unidades que el umbral indicado.</p>
-          <div class="row"><input id="umbral" placeholder="Umbral" value="50" type="number" /></div>
+          <p class="desc">Productos con menos unidades que el umbral indicado. El umbral debe ser positivo.</p>
+          <div class="field">
+            <label for="umbral">Umbral de unidades</label>
+            <input id="umbral" placeholder="50" value="50" type="number" min="1" />
+          </div>
           <button class="action" onclick="q8()">Ver stock bajo</button>
         </div>
 
         <div class="card">
           <h3>Decrementar stock<span class="pill">Q15</span></h3>
-          <p class="desc">Descontar unidades de un producto (consumo en consulta).</p>
+          <p class="desc">Descontar unidades de un producto. Falla si el stock disponible es menor.</p>
           <div class="row">
-            <input id="prodId" placeholder="ID producto (ej: PRD001)" value="PRD001" />
-            <input id="prodCant" placeholder="Cant." value="3" type="number" style="max-width:90px" />
+            <div class="field">
+              <label for="prodId">ID del producto</label>
+              <input id="prodId" placeholder="PRD001" value="PRD001" />
+            </div>
+            <div class="field" style="flex:0 0 90px">
+              <label for="prodCant">Cantidad</label>
+              <input id="prodCant" placeholder="3" value="3" type="number" min="1" />
+            </div>
           </div>
           <button class="action" onclick="q15()">Aplicar decremento</button>
         </div>
@@ -546,16 +680,32 @@
       });
     }
     function q13Baja() {
-      run(`Baja lógica propietario ${v('modId')}`, 'DELETE', `/api/propietarios/${v('modId')}`);
+      run(`Baja lógica propietario ${v('bajaId')}`, 'DELETE', `/api/propietarios/${v('bajaId')}`);
     }
-    function parseProductos(raw) {
-      // Acepta formato "PRD001:2, PRD003:1" y devuelve [{id_producto, cantidad}]
-      if (!raw) return [];
-      return raw.split(',').map(s => s.trim()).filter(Boolean).map(part => {
-        const [id, cant] = part.split(':').map(x => x.trim());
-        return { id_producto: id, cantidad: Number(cant) || 1 };
-      });
+
+    // Productos usados: lista dinámica con + y x
+    function addProductoRow(id = '', cantidad = '') {
+      const container = document.getElementById('productosLista');
+      const row = document.createElement('div');
+      row.className = 'producto-row';
+      row.innerHTML = `
+        <input type="text" class="prod-id" placeholder="PRD001" value="${id}" />
+        <input type="number" class="prod-cant" placeholder="1" min="1" value="${cantidad}" />
+        <button type="button" class="btn-icon" onclick="this.parentElement.remove()" title="Quitar">×</button>
+      `;
+      container.appendChild(row);
     }
+
+    function getProductos() {
+      const rows = document.querySelectorAll('#productosLista .producto-row');
+      return Array.from(rows).map(r => ({
+        id_producto: r.querySelector('.prod-id').value.trim(),
+        cantidad: Number(r.querySelector('.prod-cant').value),
+      })).filter(p => p.id_producto && p.cantidad > 0);
+    }
+
+    // Una fila inicial vacía para que sea obvio que se pueden agregar productos
+    window.addEventListener('DOMContentLoaded', () => addProductoRow());
 
     function q14() {
       const body = {
@@ -565,7 +715,7 @@
         costo: Number(v('cCosto')),
         estado: v('cEstado'),
       };
-      const productos = parseProductos(v('cProductos'));
+      const productos = getProductos();
       if (productos.length) body.productos_usados = productos;
       run('Alta de consulta', 'POST', '/api/consultas', body);
     }

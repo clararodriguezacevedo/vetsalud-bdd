@@ -183,6 +183,10 @@ export async function ingresosPorVetMesActual() {
 }
 
 // 12 - Propietarios sin consultas registradas en el último año (Mongo)
+// Considera solo propietarios activos (los dados de baja ya no son clientes).
+// Incluye 'cantidad_mascotas' en el resultado para distinguir entre
+// propietarios sin pacientes y propietarios cuyos pacientes simplemente
+// no fueron atendidos en el período.
 export async function propietariosSinConsultasUltimoAnio() {
   const { db } = await connect();
   const haceUnAnio = new Date();
@@ -190,6 +194,7 @@ export async function propietariosSinConsultasUltimoAnio() {
   return db
     .collection('propietarios')
     .aggregate([
+      { $match: { activo: true } },
       {
         $lookup: {
           from: 'pacientes',
