@@ -36,30 +36,75 @@
   </header>
   <main>
     <nav>
-      <h2>Consultas</h2>
+      <h2>Consultas de lectura</h2>
+
+      <!-- 1 - Pacientes activos con propietario -->
       <button onclick="get('/api/pacientes-activos', '1 - Pacientes activos + propietario')">
         1 - Pacientes activos<span class="pill mongo">Mongo</span>
       </button>
+
+      <!-- 7 - Top 5 diagnósticos -->
       <button onclick="get('/api/top-diagnosticos', '7 - Top 5 diagnósticos')">
         7 - Top diagnósticos<span class="pill mongo">Mongo</span>
       </button>
+
+      <!-- 8 - Stock bajo -->
       <button onclick="get('/api/stock-bajo?umbral=50', '8 - Stock bajo (&lt; 50 unidades)')">
         8 - Stock bajo<span class="pill redis">Redis</span>
       </button>
+
+      <!-- 9 - Controles baratos -->
       <button onclick="get('/api/controles-baratos?max=5000', '9 - Controles &lt; $5000')">
         9 - Controles baratos<span class="pill mongo">Mongo</span>
       </button>
+
+      <!-- 10 - Pacientes por sucursal -->
       <button onclick="get('/api/pacientes-sucursal?sucursal=Palermo', '10 - Pacientes de Palermo')">
         10 - Pacientes por sucursal<span class="pill mongo">Mongo</span>
       </button>
+
+      <!-- 11 - Ingresos por veterinario (mes actual) -->
       <button onclick="get('/api/ingresos-vet-mes', '11 - Ingresos por vet (mes actual)')">
         11 - Ingresos por vet<span class="pill mongo">Mongo</span>
       </button>
+
+      <!-- 12 - Propietarios sin consultas en el último año -->
       <button onclick="get('/api/propietarios-inactivos', '12 - Propietarios sin consultas (1 año)')">
         12 - Propietarios inactivos<span class="pill mongo">Mongo</span>
       </button>
 
-      <h2 style="margin-top:24px">Decrementar stock (15)<span class="pill redis">Redis</span></h2>
+      <!-- 13 - ABM de propietarios -->
+      <h2 style="margin-top:24px">13 - ABM propietarios<span class="pill mongo">Mongo</span></h2>
+      <div class="row">
+        <input id="propId" placeholder="id (ej: C007)" value="C007" />
+      </div>
+      <div class="row">
+        <input id="propNombre" placeholder="nombre" value="Lucía" />
+        <input id="propApellido" placeholder="apellido" value="Vega" />
+      </div>
+      <div class="row">
+        <input id="propCiudad" placeholder="ciudad" value="CABA" />
+      </div>
+      <button onclick="altaProp()">Alta propietario</button>
+      <button onclick="modProp()">Modificar (ciudad)</button>
+      <button onclick="bajaProp()">Baja lógica</button>
+
+      <!-- 14 - Alta de consulta -->
+      <h2 style="margin-top:24px">14 - Alta consulta<span class="pill mongo">Mongo</span></h2>
+      <div class="row">
+        <input id="consPac" placeholder="id_paciente" value="P002" />
+        <input id="consVet" placeholder="id_vet" value="V003" style="max-width:90px" />
+      </div>
+      <div class="row">
+        <input id="consMotivo" placeholder="motivo" value="Control" />
+      </div>
+      <div class="row">
+        <input id="consCosto" placeholder="costo" value="3000" />
+      </div>
+      <button onclick="altaCons()">Alta consulta</button>
+
+      <!-- 15 - Decrementar stock -->
+      <h2 style="margin-top:24px">15 - Decrementar stock<span class="pill redis">Redis</span></h2>
       <div class="row">
         <input id="prod" placeholder="id (ej: PRD001)" value="PRD001" />
         <input id="cant" placeholder="cant." value="3" style="max-width:70px" />
@@ -75,6 +120,7 @@
   <script>
     const salida = document.getElementById('salida');
     const titulo = document.getElementById('titulo');
+    const v = (id) => document.getElementById(id).value.trim();
 
     function render(title, data) {
       titulo.innerHTML = title;
@@ -91,19 +137,53 @@
       }
     }
 
-    async function decrementar() {
-      const id_producto = document.getElementById('prod').value.trim();
-      const cantidad = Number(document.getElementById('cant').value);
+    async function send(method, url, body, title) {
       try {
-        const res = await fetch('/api/decrementar-stock', {
-          method: 'POST',
+        const res = await fetch(url, {
+          method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_producto, cantidad }),
+          body: body ? JSON.stringify(body) : undefined,
         });
-        render(`15 - Decremento de ${id_producto} (-${cantidad})`, await res.json());
+        render(title, await res.json());
       } catch (e) {
-        render('15 - Decremento', { error: e.message });
+        render(title, { error: e.message });
       }
+    }
+
+    // 13 - ABM propietarios
+    function altaProp() {
+      send('POST', '/api/propietarios', {
+        _id: v('propId'),
+        nombre: v('propNombre'),
+        apellido: v('propApellido'),
+        ciudad: v('propCiudad'),
+      }, `13 - Alta propietario ${v('propId')}`);
+    }
+    function modProp() {
+      send('PUT', `/api/propietarios/${v('propId')}`, { ciudad: v('propCiudad') },
+        `13 - Modificar propietario ${v('propId')}`);
+    }
+    function bajaProp() {
+      send('DELETE', `/api/propietarios/${v('propId')}`, null,
+        `13 - Baja lógica propietario ${v('propId')}`);
+    }
+
+    // 14 - Alta consulta
+    function altaCons() {
+      send('POST', '/api/consultas', {
+        id_paciente: v('consPac'),
+        id_vet: v('consVet'),
+        motivo: v('consMotivo'),
+        costo: Number(v('consCosto')),
+      }, '14 - Alta de consulta');
+    }
+
+    // 15 - Decrementar stock
+    function decrementar() {
+      const id_producto = v('prod');
+      const cantidad = Number(v('cant'));
+      send('POST', '/api/decrementar-stock', { id_producto, cantidad },
+        `15 - Decremento de ${id_producto} (-${cantidad})`);
     }
   </script>
 </body>

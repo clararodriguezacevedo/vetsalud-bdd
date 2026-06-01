@@ -1,6 +1,6 @@
 import { connect } from './db.js';
 
-// 1 Pacientes activos con todos sus datos de propietario (Mongo)
+// 1 - Pacientes activos con todos sus datos de propietario (Mongo)
 export async function pacientesActivosConPropietario() {
   const { db } = await connect();
   return db
@@ -20,7 +20,7 @@ export async function pacientesActivosConPropietario() {
     .toArray();
 }
 
-// 7 Top 5 diagnósticos más frecuentes (Mongo)
+// 7 - Top 5 diagnósticos más frecuentes (Mongo)
 export async function topDiagnosticos() {
   const { db } = await connect();
   return db
@@ -33,7 +33,7 @@ export async function topDiagnosticos() {
     .toArray();
 }
 
-// 8 Stock con menos de N unidades y su proveedor (Redis)
+// 8 - Stock con menos de N unidades y su proveedor (Redis)
 export async function stockBajo(umbral = 50) {
   const { redis } = await connect();
   // Sorted Set: traemos los ids con score (unidades) por debajo del umbral
@@ -46,20 +46,7 @@ export async function stockBajo(umbral = 50) {
   return productos;
 }
 
-// 15 Decrementar unidades de un producto tras una consulta (Redis)
-export async function decrementarStock(idProducto, cantidad) {
-  const { redis } = await connect();
-  const key = `producto:${idProducto}`;
-  if (!(await redis.exists(key))) {
-    throw new Error(`El producto ${idProducto} no existe`);
-  }
-  // HINCRBY es atómico: evita condiciones de carrera al descontar stock
-  const unidades = await redis.hIncrBy(key, 'unidades', -Math.abs(cantidad));
-  await redis.zAdd('stock:unidades', { score: unidades, value: idProducto }); // mantener índice
-  return { id_producto: idProducto, unidades };
-}
-
-// 9 Consultas de tipo 'Control' con costo menor a $5.000 (Mongo)
+// 9 - Consultas de tipo Control con costo menor a 5000 (Mongo)
 export async function controlesBaratos(maxCosto = 5000) {
   const { db } = await connect();
   return db
@@ -86,7 +73,7 @@ export async function controlesBaratos(maxCosto = 5000) {
     .toArray();
 }
 
-// 10 Todos los pacientes de una sucursal, a través del veterinario (Mongo)
+// 10 - Pacientes de una sucursal, a través del veterinario (Mongo)
 export async function pacientesPorSucursal(sucursal) {
   const { db } = await connect();
   return db
@@ -118,7 +105,7 @@ export async function pacientesPorSucursal(sucursal) {
     .toArray();
 }
 
-// 11 Ingresos totales por veterinario en el mes actual (Mongo)
+// 11 - Ingresos totales por veterinario en el mes actual (Mongo)
 export async function ingresosPorVetMesActual() {
   const { db } = await connect();
   const ahora = new Date();
@@ -150,7 +137,7 @@ export async function ingresosPorVetMesActual() {
     .toArray();
 }
 
-// 12 Propietarios sin consultas registradas en el último año (Mongo)
+// 12 - Propietarios sin consultas registradas en el último año (Mongo)
 export async function propietariosSinConsultasUltimoAnio() {
   const { db } = await connect();
   const haceUnAnio = new Date();
@@ -191,8 +178,8 @@ export async function propietariosSinConsultasUltimoAnio() {
     .toArray();
 }
 
-// ABM de propietarios: alta, modificación, baja lógica
-
+// 13 - ABM de propietarios
+// Alta, modificación, baja lógica (Mongo)
 export async function altaPropietario(propietario) {
   const { db } = await connect();
   if (!propietario._id) throw new Error('Falta el _id del propietario');
@@ -217,7 +204,7 @@ export async function bajaPropietario(id) {
   return { ok: true, baja_logica: id };
 }
 
-// 14 Alta de consulta validando paciente y veterinario existentes
+// 14 - Alta de consulta validando paciente y veterinario existentes (Mongo)
 export async function altaConsulta(consulta) {
   const { db } = await connect();
   const { id_paciente, id_vet } = consulta;
@@ -243,4 +230,18 @@ export async function altaConsulta(consulta) {
   };
   await db.collection('consultas').insertOne(doc);
   return { ok: true, consulta: doc };
+}
+
+// 15 - Decrementar unidades de un producto tras una consulta (Redis)
+export async function decrementarStock(idProducto, cantidad) {
+  const { redis } = await connect();
+  const key = `producto:${idProducto}`;
+  if (!(await redis.exists(key))) {
+    throw new Error(`El producto ${idProducto} no existe`);
+  }
+  // HINCRBY es atómico
+  // Evita race conditions al descontar stock
+  const unidades = await redis.hIncrBy(key, 'unidades', -Math.abs(cantidad));
+  await redis.zAdd('stock:unidades', { score: unidades, value: idProducto }); // mantener índice
+  return { id_producto: idProducto, unidades };
 }

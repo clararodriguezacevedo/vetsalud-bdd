@@ -18,25 +18,39 @@ const wrap = (fn) => async (req, res) => {
   }
 };
 
-// Endpoints de las consultas implementadas
+// 1 - Pacientes activos con propietario
 app.get('/api/pacientes-activos', wrap(() => q.pacientesActivosConPropietario()));
+
+// 7 - Top 5 diagnósticos
 app.get('/api/top-diagnosticos', wrap(() => q.topDiagnosticos()));
+
+// 8 - Stock bajo
 app.get('/api/stock-bajo', wrap((req) => q.stockBajo(Number(req.query.umbral) || 50)));
-app.post('/api/decrementar-stock', wrap((req) =>
-  q.decrementarStock(req.body.id_producto, Number(req.body.cantidad))
-));
+
+// 9 - Controles con costo menor a 5000
 app.get('/api/controles-baratos', wrap((req) => q.controlesBaratos(Number(req.query.max) || 5000)));
+
+// 10 - Pacientes de una sucursal
 app.get('/api/pacientes-sucursal', wrap((req) => q.pacientesPorSucursal(req.query.sucursal || 'Palermo')));
+
+// 11 - Ingresos por veterinario (mes actual)
 app.get('/api/ingresos-vet-mes', wrap(() => q.ingresosPorVetMesActual()));
+
+// 12 - Propietarios sin consultas en el último año
 app.get('/api/propietarios-inactivos', wrap(() => q.propietariosSinConsultasUltimoAnio()));
 
-// 13 ABM de propietarios
+// 13 - ABM de propietarios
 app.post('/api/propietarios', wrap((req) => q.altaPropietario(req.body)));
 app.put('/api/propietarios/:id', wrap((req) => q.modificarPropietario(req.params.id, req.body)));
 app.delete('/api/propietarios/:id', wrap((req) => q.bajaPropietario(req.params.id)));
 
-// 14 Alta de consulta con validación
+// 14 - Alta de consulta con validación
 app.post('/api/consultas', wrap((req) => q.altaConsulta(req.body)));
+
+// 15 - Decrementar stock
+app.post('/api/decrementar-stock', wrap((req) =>
+  q.decrementarStock(req.body.id_producto, Number(req.body.cantidad))
+));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API escuchando en http://localhost:${PORT}`));
