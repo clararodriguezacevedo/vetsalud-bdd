@@ -21,6 +21,21 @@ const wrap = (fn) => async (req, res) => {
 // 1 - Pacientes activos con propietario
 app.get('/api/pacientes-activos', wrap(() => q.pacientesActivosConPropietario()));
 
+// 2 - Consultas en seguimiento
+app.get('/api/consultas-seguimiento', wrap(() => q.consultasEnSeguimiento()));
+
+// 3 - Historial completo de un paciente
+app.get('/api/historial-paciente/:id', wrap((req) => q.historialPaciente(req.params.id)));
+
+// 4 - Propietarios con múltiples pacientes
+app.get('/api/propietarios-multiples-pacientes', wrap(() => q.propietariosConMultiplesPacientes()));
+
+// 5 - Veterinarios activos con consultas en 60 días
+app.get('/api/vets-activos-consultas-60d', wrap(() => q.veterinariosActivosConConsultas60d()));
+
+// 6 - Pacientes con vacunas vencidas
+app.get('/api/pacientes-vacunas-vencidas', wrap(() => q.pacientesConVacunasVencidas()));
+
 // 7 - Top 5 diagnósticos
 app.get('/api/top-diagnosticos', wrap(() => q.topDiagnosticos()));
 

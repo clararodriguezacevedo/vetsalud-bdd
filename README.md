@@ -24,6 +24,17 @@ MongoDB — más simple que duplicar colecciones con la misma forma.
 Las **vacunaciones** quedan en su propia colección porque su estructura es
 diferente (sin `costo`, con `proxima_dosis`).
 
+## Justificación técnica
+
+- **MongoDB** se usa para las entidades clínicas y administrativas porque el
+  modelo es flexible y las consultas del trabajo dependen de agregaciones,
+  filtros por fecha y cruces entre documentos relacionados.
+- **Redis** se usa para stock porque requiere lecturas rápidas y decrementos
+  atómicos sobre cantidades, algo que encaja mejor que un documento mutable.
+- La colección `consultas` agrupa consultas y cirugías porque comparten casi
+  toda la estructura. El discriminador `tipo` evita duplicación y simplifica
+  los reportes clínicos.
+
 ## Cómo correrlo (GitHub Codespaces o local)
 
 Requisitos: Docker y Node.js 18+ (ambos vienen en Codespaces).
@@ -58,7 +69,7 @@ vetsalud/
 └── src/
     ├── db.js               # Conexión a ambos motores
     ├── seed.js             # Carga de CSV → Mongo + Redis
-    ├── queries.js          # Las 15 consultas (10 implementadas: 1,7-15. Faltan 2-6)
+  ├── queries.js          # Las 15 consultas implementadas
     └── server.js           # API Express
 ```
 
@@ -67,6 +78,11 @@ vetsalud/
 | #  | Consulta | Motor | Función | Endpoint |
 |----|----------|-------|---------|----------|
 | 1  | Pacientes activos + propietario | Mongo | `pacientesActivosConPropietario` | `GET /api/pacientes-activos` |
+| 2  | Consultas en seguimiento con veterinario y costo | Mongo | `consultasEnSeguimiento` | `GET /api/consultas-seguimiento` |
+| 3  | Historial completo de un paciente | Mongo | `historialPaciente` | `GET /api/historial-paciente/:id` |
+| 4  | Propietarios con más de un paciente | Mongo | `propietariosConMultiplesPacientes` | `GET /api/propietarios-multiples-pacientes` |
+| 5  | Veterinarios activos con consultas en 60 días | Mongo | `veterinariosActivosConConsultas60d` | `GET /api/vets-activos-consultas-60d` |
+| 6  | Pacientes con vacunas vencidas | Mongo | `pacientesConVacunasVencidas` | `GET /api/pacientes-vacunas-vencidas` |
 | 7  | Top 5 diagnósticos | Mongo | `topDiagnosticos` | `GET /api/top-diagnosticos` |
 | 8  | Stock con menos de N unidades | Redis | `stockBajo` | `GET /api/stock-bajo?umbral=50` |
 | 9  | Controles con costo < $5.000 | Mongo | `controlesBaratos` | `GET /api/controles-baratos?max=5000` |
@@ -77,7 +93,13 @@ vetsalud/
 | 14 | Alta de consulta (valida activo + descuento de stock) | Mongo + Redis | `altaConsulta` | `POST /api/consultas` |
 | 15 | Decrementar stock (previene negativos) | Redis | `decrementarStock` | `POST /api/decrementar-stock` |
 
-Faltan implementar las consultas 2, 3, 4, 5 y 6.
+## Ejemplos de salida
+
+- **Q2** devuelve consultas con `paciente` y `veterinario` embebidos, además de `costo`, `motivo`, `diagnostico` y `estado`.
+- **Q3** devuelve un historial unificado con `tipo_evento`, `fecha`, `paciente`, `veterinario` y los campos específicos de consulta o vacunación.
+- **Q4** devuelve `propietario` y `cantidad_pacientes` para cada dueño con más de una mascota.
+- **Q5** devuelve `cantidad_consultas_60d` por veterinario activo, ordenado de mayor a menor.
+- **Q6** devuelve el paciente, su propietario y la lista `vacunas_vencidas` agrupada por animal.
 
 ### Probar las operaciones de escritura
 

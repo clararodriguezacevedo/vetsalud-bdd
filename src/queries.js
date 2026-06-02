@@ -41,6 +41,302 @@ export async function pacientesActivosConPropietario() {
     .toArray();
 }
 
+// 2 - Consultas en seguimiento con veterinario asignado y costo (Mongo)
+export async function consultasEnSeguimiento() {
+  const { db } = await connect();
+  return db
+    .collection('consultas')
+    .aggregate([
+      { $match: { estado: 'Seguimiento' } },
+      {
+        $lookup: {
+          from: 'veterinarios',
+          localField: 'id_vet',
+          foreignField: '_id',
+          as: 'veterinario',
+        },
+      },
+      { $unwind: '$veterinario' },
+      {
+        $lookup: {
+          from: 'pacientes',
+          localField: 'id_paciente',
+          foreignField: '_id',
+          as: 'paciente',
+        },
+      },
+      { $unwind: '$paciente' },
+      {
+        $project: {
+          _id: 1,
+          fecha: 1,
+          tipo: 1,
+          motivo: 1,
+          diagnostico: 1,
+          costo: 1,
+          estado: 1,
+          id_paciente: 1,
+          paciente: {
+            _id: '$paciente._id',
+            nombre: '$paciente.nombre',
+            especie: '$paciente.especie',
+            raza: '$paciente.raza',
+          },
+          veterinario: {
+            _id: '$veterinario._id',
+            nombre: '$veterinario.nombre',
+            apellido: '$veterinario.apellido',
+            matricula: '$veterinario.matricula',
+            especialidad: '$veterinario.especialidad',
+            sucursal: '$veterinario.sucursal',
+          },
+        },
+      },
+      { $sort: { fecha: -1, _id: 1 } },
+    ])
+    .toArray();
+}
+
+// 3 - Historial completo de un paciente: consultas + vacunaciones (Mongo)
+// Se devuelve ordenado por fecha descendente para ver lo más reciente primero.
+export async function historialPaciente(idPaciente) {
+  const { db } = await connect();
+  const paciente = await db.collection('pacientes').findOne({ _id: idPaciente });
+  if (!paciente) throw new Error(`El paciente ${idPaciente} no existe`);
+
+  const [consultas, vacunaciones] = await Promise.all([
+    db.collection('consultas').aggregate([
+      { $match: { id_paciente: idPaciente } },
+      {
+        $lookup: {
+          from: 'veterinarios',
+          localField: 'id_vet',
+          foreignField: '_id',
+          as: 'veterinario',
+        },
+      },
+      { $unwind: '$veterinario' },
+      {
+        $project: {
+          _id: 0,
+          tipo_evento: { $literal: 'Consulta' },
+          id_evento: '$_id',
+          fecha: 1,
+          paciente: { _id: paciente._id, nombre: paciente.nombre, especie: paciente.especie, raza: paciente.raza },
+          veterinario: {
+            _id: '$veterinario._id',
+            nombre: '$veterinario.nombre',
+            apellido: '$veterinario.apellido',
+            matricula: '$veterinario.matricula',
+            sucursal: '$veterinario.sucursal',
+          },
+          motivo: 1,
+          diagnostico: 1,
+          costo: 1,
+          estado: 1,
+          nombre_vacuna: { $literal: null },
+          proxima_dosis: { $literal: null },
+        },
+      },
+    ]).toArray(),
+    db.collection('vacunaciones').aggregate([
+      { $match: { id_paciente: idPaciente } },
+      {
+        $lookup: {
+          from: 'veterinarios',
+          localField: 'id_vet',
+          foreignField: '_id',
+          as: 'veterinario',
+        },
+      },
+      { $unwind: '$veterinario' },
+      {
+        $project: {
+          _id: 0,
+          tipo_evento: { $literal: 'Vacunacion' },
+          id_evento: '$_id',
+          fecha: '$fecha_aplicacion',
+          paciente: { _id: paciente._id, nombre: paciente.nombre, especie: paciente.especie, raza: paciente.raza },
+          veterinario: {
+            _id: '$veterinario._id',
+            nombre: '$veterinario.nombre',
+            apellido: '$veterinario.apellido',
+            matricula: '$veterinario.matricula',
+            sucursal: '$veterinario.sucursal',
+          },
+          motivo: { $literal: null },
+          diagnostico: { $literal: null },
+          costo: { $literal: null },
+          estado: { $literal: null },
+          nombre_vacuna: 1,
+          proxima_dosis: 1,
+        },
+      },
+    ]).toArray(),
+  ]);
+
+  return [...consultas, ...vacunaciones]
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || String(a.id_evento).localeCompare(String(b.id_evento)));
+}
+
+// 4 - Propietarios con más de un paciente registrado (Mongo)
+export async function propietariosConMultiplesPacientes() {
+  const { db } = await connect();
+  return db
+    .collection('pacientes')
+    .aggregate([
+      { $group: { _id: '$id_propietario', cantidad_pacientes: { $sum: 1 } } },
+      { $match: { cantidad_pacientes: { $gt: 1 } } },
+      {
+        $lookup: {
+          from: 'propietarios',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'propietario',
+        },
+      },
+      { $unwind: '$propietario' },
+      {
+        $project: {
+          _id: 0,
+          id_propietario: '$_id',
+          cantidad_pacientes: 1,
+          propietario: {
+            _id: '$propietario._id',
+            nombre: '$propietario.nombre',
+            apellido: '$propietario.apellido',
+            email: '$propietario.email',
+            telefono: '$propietario.telefono',
+            ciudad: '$propietario.ciudad',
+            provincia: '$propietario.provincia',
+            activo: '$propietario.activo',
+          },
+        },
+      },
+      { $sort: { cantidad_pacientes: -1, id_propietario: 1 } },
+    ])
+    .toArray();
+}
+
+// 5 - Veterinarios activos y cantidad de consultas en los últimos 60 días (Mongo)
+export async function veterinariosActivosConConsultas60d() {
+  const { db } = await connect();
+  const desde = new Date();
+  desde.setDate(desde.getDate() - 60);
+  return db
+    .collection('veterinarios')
+    .aggregate([
+      { $match: { activo: true } },
+      {
+        $lookup: {
+          from: 'consultas',
+          let: { vetId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$id_vet', '$$vetId'] },
+                    { $gte: ['$fecha', desde] },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'consultas_60d',
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          id_vet: '$_id',
+          nombre: 1,
+          apellido: 1,
+          matricula: 1,
+          especialidad: 1,
+          sucursal: 1,
+          activo: 1,
+          cantidad_consultas_60d: { $size: '$consultas_60d' },
+        },
+      },
+      { $sort: { cantidad_consultas_60d: -1, apellido: 1, nombre: 1 } },
+    ])
+    .toArray();
+}
+
+// 6 - Pacientes con vacunas vencidas (Mongo)
+export async function pacientesConVacunasVencidas() {
+  const { db } = await connect();
+  const hoy = new Date();
+  return db
+    .collection('vacunaciones')
+    .aggregate([
+      { $match: { proxima_dosis: { $lt: hoy } } },
+      {
+        $group: {
+          _id: '$id_paciente',
+          cantidad_vacunas_vencidas: { $sum: 1 },
+          vacunas_vencidas: {
+            $push: {
+              id_vacuna: '$_id',
+              nombre_vacuna: '$nombre_vacuna',
+              fecha_aplicacion: '$fecha_aplicacion',
+              proxima_dosis: '$proxima_dosis',
+              id_vet: '$id_vet',
+            },
+          },
+          proxima_dosis_mas_antigua: { $min: '$proxima_dosis' },
+        },
+      },
+      {
+        $lookup: {
+          from: 'pacientes',
+          localField: '_id',
+          foreignField: '_id',
+          as: 'paciente',
+        },
+      },
+      { $unwind: '$paciente' },
+      {
+        $lookup: {
+          from: 'propietarios',
+          localField: 'paciente.id_propietario',
+          foreignField: '_id',
+          as: 'propietario',
+        },
+      },
+      { $unwind: '$propietario' },
+      {
+        $project: {
+          _id: 0,
+          id_paciente: '$_id',
+          cantidad_vacunas_vencidas: 1,
+          proxima_dosis_mas_antigua: 1,
+          paciente: {
+            _id: '$paciente._id',
+            nombre: '$paciente.nombre',
+            especie: '$paciente.especie',
+            raza: '$paciente.raza',
+            activo: '$paciente.activo',
+          },
+          propietario: {
+            _id: '$propietario._id',
+            nombre: '$propietario.nombre',
+            apellido: '$propietario.apellido',
+            email: '$propietario.email',
+            telefono: '$propietario.telefono',
+            ciudad: '$propietario.ciudad',
+            provincia: '$propietario.provincia',
+            activo: '$propietario.activo',
+          },
+          vacunas_vencidas: 1,
+        },
+      },
+      { $sort: { proxima_dosis_mas_antigua: 1, id_paciente: 1 } },
+    ])
+    .toArray();
+}
+
 // 7 - Top 5 diagnósticos más frecuentes (Mongo)
 export async function topDiagnosticos() {
   const { db } = await connect();
