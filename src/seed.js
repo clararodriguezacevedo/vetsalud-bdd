@@ -72,7 +72,17 @@ async function main() {
     proxima_dosis: new Date(r.proxima_dosis),
   }));
 
-  const colecciones = { propietarios, pacientes, veterinarios, consultas, vacunaciones };
+  const stockCsv = readCsv('stock_farmaceutico.csv');
+  const productos = stockCsv.map((p) => ({
+    _id: p.id_producto,
+    nombre: p.nombre,
+    categoria: p.categoria,
+    precio_unit: Number(p.precio_unit),
+    vencimiento: new Date(p.vencimiento),
+    proveedor: p.proveedor,
+  }));
+
+  const colecciones = { propietarios, pacientes, veterinarios, consultas, vacunaciones, productos };
   for (const [nombre, docs] of Object.entries(colecciones)) {
     const col = db.collection(nombre);
     await col.deleteMany({});
@@ -84,28 +94,17 @@ async function main() {
   await db.collection('consultas').createIndex({ fecha: 1 });
   await db.collection('consultas').createIndex({ id_vet: 1 });
   await db.collection('pacientes').createIndex({ id_propietario: 1 });
-
-  // Redis
-  const stock = readCsv('stock_farmaceutico.csv');
+  await db.collection('productos').createIndex({ proveedor: 1 });
+  await db.collection('productos').createIndex({ vencimiento: 1 });
 
   const viejas = await redis.keys('producto:*');
   if (viejas.length) await redis.del(viejas);
   await redis.del('stock:unidades');
 
-  for (const p of stock) {
-    await redis.hSet(`producto:${p.id_producto}`, {
-      nombre: p.nombre,
-      categoria: p.categoria,
-      unidades: p.unidades,
-      precio_unit: p.precio_unit,
-      vencimiento: p.vencimiento,
-      proveedor: p.proveedor,
-    });
-    // Sorted Set: score = unidades 
-    // Permite buscar bajo stock por rango 
+  for (const p of stockCsv) {
     await redis.zAdd('stock:unidades', { score: Number(p.unidades), value: p.id_producto });
   }
-  console.log(`Redis stock: ${stock.length} productos`);
+  console.log(`Redis stock:unidades: ${stockCsv.length} productos`);
 
   await close();
   console.log('\nSeed completado correctamente.');

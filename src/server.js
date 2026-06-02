@@ -76,5 +76,8 @@ app.post('/api/decrementar-stock', wrap((req) =>
   q.decrementarStock(req.body.id_producto, Number(req.body.cantidad))
 ));
 
+// Caché - vaciar todas las entradas (útil para demo o tras un reseed)
+app.post('/api/cache/flush', wrap(() => q.flushCache()));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API escuchando en http://localhost:${PORT}`));

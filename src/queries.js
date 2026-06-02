@@ -7,6 +7,38 @@ import { connect } from './db.js';
 // Las vacunaciones quedan en su propia colección porque su estructura
 // difiere (sin costo, con proxima_dosis).
 
+// ---------------------------------------------------------------------
+// Caché (cache-aside con TTL sobre Redis)
+//   - cached(key, ttl, fn): intenta leer la key; si no está, ejecuta fn,
+//     guarda el resultado serializado en Redis y lo devuelve.
+//   - invalidate(...keys): borra una o más keys de caché. Se llama desde
+//     las operaciones de escritura cuando los datos cacheados quedan
+//     obsoletos.
+// Las keys de caché empiezan con 'cache:' para no chocar con 'stock:*'.
+// ---------------------------------------------------------------------
+async function cached(key, ttlSeconds, fn) {
+  const { redis } = await connect();
+  const hit = await redis.get(key);
+  if (hit !== null) return JSON.parse(hit);
+  const value = await fn();
+  await redis.set(key, JSON.stringify(value), { EX: ttlSeconds });
+  return value;
+}
+
+async function invalidate(...keys) {
+  if (!keys.length) return;
+  const { redis } = await connect();
+  await redis.del(keys);
+}
+
+// Útil para inspección y para un endpoint admin de "limpiar caché".
+export async function flushCache() {
+  const { redis } = await connect();
+  const keys = await redis.keys('cache:*');
+  if (keys.length) await redis.del(keys);
+  return { ok: true, eliminadas: keys.length };
+}
+
 // 1 - Pacientes activos con todos sus datos de propietario (Mongo)
 // Incluye el estado (activo / baja lógica) del propietario.
 export async function pacientesActivosConPropietario() {
@@ -218,8 +250,9 @@ export async function propietariosConMultiplesPacientes() {
     .toArray();
 }
 
-// 5 - Veterinarios activos y cantidad de consultas en los últimos 60 días (Mongo)
+// 5 - Veterinarios activos y cantidad de consultas en los últimos 60 días (Mongo, cacheado)
 export async function veterinariosActivosConConsultas60d() {
+  return cached('cache:vets-consultas-60d', 300, async () => {
   const { db } = await connect();
   const desde = new Date();
   desde.setDate(desde.getDate() - 60);
@@ -262,6 +295,7 @@ export async function veterinariosActivosConConsultas60d() {
       { $sort: { cantidad_consultas_60d: -1, apellido: 1, nombre: 1 } },
     ])
     .toArray();
+  });
 }
 
 // 6 - Pacientes con vacunas vencidas (Mongo)
@@ -337,30 +371,39 @@ export async function pacientesConVacunasVencidas() {
     .toArray();
 }
 
-// 7 - Top 5 diagnósticos más frecuentes (Mongo)
+// 7 - Top 5 diagnósticos más frecuentes (Mongo, cacheado)
 export async function topDiagnosticos() {
-  const { db } = await connect();
-  return db
-    .collection('consultas')
-    .aggregate([
-      { $group: { _id: '$diagnostico', total: { $sum: 1 } } },
-      { $sort: { total: -1 } },
-      { $limit: 5 },
-    ])
-    .toArray();
+  return cached('cache:top-diagnosticos', 300, async () => {
+    const { db } = await connect();
+    return db
+      .collection('consultas')
+      .aggregate([
+        { $group: { _id: '$diagnostico', total: { $sum: 1 } } },
+        { $sort: { total: -1 } },
+        { $limit: 5 },
+      ])
+      .toArray();
+  });
 }
 
-// 8 - Stock con menos de N unidades y su proveedor (Redis)
+// 8 - Stock bajo (Redis + Mongo) - patrón políglota explícito
+// Redis: índice ordenado por unidades -> trae los IDs con stock < umbral.
+// Mongo: master data de los productos (nombre, proveedor, vencimiento, etc).
+// Combinamos ambas fuentes para devolver el resultado completo.
 export async function stockBajo(umbral = 50) {
-  const { redis } = await connect();
-  // Sorted Set: traemos los ids con score (unidades) por debajo del umbral
-  const ids = await redis.zRangeByScore('stock:unidades', '-inf', umbral - 1);
-  const productos = [];
-  for (const id of ids) {
-    const p = await redis.hGetAll(`producto:${id}`);
-    productos.push({ id_producto: id, ...p, unidades: Number(p.unidades) });
-  }
-  return productos;
+  const { db, redis } = await connect();
+  // 1. Redis: IDs ordenados por unidades ascendente, con sus scores
+  const entries = await redis.zRangeByScoreWithScores('stock:unidades', '-inf', umbral - 1);
+  if (entries.length === 0) return [];
+  // 2. Mongo: metadata para esos IDs (una sola query, $in)
+  const ids = entries.map((e) => e.value);
+  const meta = await db.collection('productos').find({ _id: { $in: ids } }).toArray();
+  const metaMap = new Map(meta.map((p) => [p._id, p]));
+  // 3. Combinar manteniendo el orden por unidades
+  return entries.map((e) => ({
+    ...(metaMap.get(e.value) || { _id: e.value }),
+    unidades: Number(e.score),
+  }));
 }
 
 // 9 - Consultas tipo 'Control' con costo menor a $5.000 (Mongo)
@@ -446,8 +489,9 @@ export async function pacientesPorSucursal(sucursal) {
     .toArray();
 }
 
-// 11 - Ingresos totales por veterinario en el mes actual (Mongo)
+// 11 - Ingresos totales por veterinario en el mes actual (Mongo, cacheado)
 export async function ingresosPorVetMesActual() {
+  return cached('cache:ingresos-vet-mes', 60, async () => {
   const { db } = await connect();
   const ahora = new Date();
   const desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
@@ -476,6 +520,7 @@ export async function ingresosPorVetMesActual() {
       { $sort: { ingresos: -1 } },
     ])
     .toArray();
+  });
 }
 
 // 12 - Propietarios sin consultas registradas en el último año (Mongo)
@@ -584,14 +629,17 @@ export async function altaConsulta(consulta) {
   }
   const productos = [...consolidado].map(([id_producto, cantidad]) => ({ id_producto, cantidad }));
 
-  // Validación del stock en Redis 
+  // Pre-validación del stock contra Redis (Sorted Set 'stock:unidades').
+  // ZSCORE devuelve null si el producto no está en el set (no existe).
+  // Esto es best-effort: el decremento real (vía Lua en Q15) hace su propia
+  // validación atómica, pero pre-validar nos permite fallar antes de insertar
+  // la consulta en Mongo.
   for (const p of productos) {
-    const key = `producto:${p.id_producto}`;
-    if (!(await redis.exists(key))) {
+    const actual = await redis.zScore('stock:unidades', p.id_producto);
+    if (actual === null) {
       throw new Error(`El producto ${p.id_producto} no existe`);
     }
-    const actual = Number(await redis.hGet(key, 'unidades'));
-    if (actual < p.cantidad) {
+    if (Number(actual) < p.cantidad) {
       throw new Error(`Stock insuficiente para ${p.id_producto}: ${actual} disponibles, ${p.cantidad} solicitadas`);
     }
   }
@@ -616,7 +664,13 @@ export async function altaConsulta(consulta) {
   };
   await db.collection('consultas').insertOne(doc);
 
-  // Decremento de stock 
+  // Invalidar cachés que dependen de la colección consultas:
+  //  - Q7 (top diagnósticos): cambia si suma un diagnóstico
+  //  - Q11 (ingresos mes actual): cambia si la nueva consulta es del mes en curso (siempre lo es)
+  //  - Q5 (vets con consultas en 60d): cambia siempre que se agregue una consulta reciente
+  await invalidate('cache:top-diagnosticos', 'cache:ingresos-vet-mes', 'cache:vets-consultas-60d');
+
+  // Decremento de stock
   const stockResultado = [];
   for (const p of productos) {
     stockResultado.push(await decrementarStock(p.id_producto, Number(p.cantidad)));
@@ -629,21 +683,36 @@ export async function altaConsulta(consulta) {
   };
 }
 
-// 15 - Decrementar unidades de un producto tras una consulta (Redis)
-// Verifica que el stock actual sea suficiente, si no, lanza error
+// 15 - Decrementar unidades de un producto (Redis, atómico via Lua)
+// Usamos un Lua script para que la verificación de existencia, la verificación
+// de stock suficiente y el ZINCRBY ocurran como una sola operación atómica.
+// Sin Lua tendríamos una ventana entre ZSCORE y ZINCRBY donde otro decremento
+// podría dejar el stock en negativo.
+// Retornos del script:
+//   -1  el producto no existe en el sorted set
+//   -2  stock insuficiente
+//   N>=0  unidades resultantes después del decremento
+const STOCK_DECREMENT_LUA = `
+local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
+if not score then return -1 end
+local cur = tonumber(score)
+local req = tonumber(ARGV[2])
+if cur < req then return -2 end
+return tonumber(redis.call('ZINCRBY', KEYS[1], -req, ARGV[1]))
+`;
+
 export async function decrementarStock(idProducto, cantidad) {
   const { redis } = await connect();
-  const key = `producto:${idProducto}`;
-  if (!(await redis.exists(key))) {
-    throw new Error(`El producto ${idProducto} no existe`);
+  const req = Math.abs(Number(cantidad));
+  const result = await redis.eval(STOCK_DECREMENT_LUA, {
+    keys: ['stock:unidades'],
+    arguments: [idProducto, String(req)],
+  });
+  const n = Number(result);
+  if (n === -1) throw new Error(`El producto ${idProducto} no existe`);
+  if (n === -2) {
+    const actual = await redis.zScore('stock:unidades', idProducto);
+    throw new Error(`Stock insuficiente para ${idProducto}: ${actual} disponibles, ${req} solicitadas`);
   }
-  const cant = Math.abs(Number(cantidad));
-  const actual = Number(await redis.hGet(key, 'unidades'));
-  if (actual < cant) {
-    throw new Error(`Stock insuficiente para ${idProducto}: ${actual} disponibles, ${cant} solicitadas`);
-  }
-  // HINCRBY es atómico: evita condiciones de carrera al descontar stock
-  const unidades = await redis.hIncrBy(key, 'unidades', -cant);
-  await redis.zAdd('stock:unidades', { score: unidades, value: idProducto }); // mantener índice
-  return { id_producto: idProducto, unidades };
+  return { id_producto: idProducto, unidades: n };
 }

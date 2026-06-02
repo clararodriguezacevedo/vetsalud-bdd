@@ -4,8 +4,10 @@ Trabajo Práctico de Base de Datos II. Arquitectura de persistencia políglota
 con dos motores NoSQL de paradigmas distintos:
 
 - **MongoDB** (documental) → dominio principal: `propietarios`, `pacientes`,
-  `veterinarios`, `consultas`, `vacunaciones`.
-- **Redis** (clave-valor) → stock farmacéutico.
+  `veterinarios`, `consultas`, `vacunaciones`, `productos` (master data del
+  catálogo farmacéutico).
+- **Redis** (clave-valor) → **únicamente el contador de unidades** de cada
+  producto, en un único Sorted Set `stock:unidades`.
 
 ## Modelo de atenciones médicas
 
@@ -29,11 +31,206 @@ diferente (sin `costo`, con `proxima_dosis`).
 - **MongoDB** se usa para las entidades clínicas y administrativas porque el
   modelo es flexible y las consultas del trabajo dependen de agregaciones,
   filtros por fecha y cruces entre documentos relacionados.
-- **Redis** se usa para stock porque requiere lecturas rápidas y decrementos
-  atómicos sobre cantidades, algo que encaja mejor que un documento mutable.
+- **Redis** se usa específicamente para la cantidad de unidades en stock,
+  porque ese dato cambia constantemente y necesita decrementos atómicos.
 - La colección `consultas` agrupa consultas y cirugías porque comparten casi
   toda la estructura. El discriminador `tipo` evita duplicación y simplifica
   los reportes clínicos.
+
+## Modelo de stock farmacéutico
+
+El stock es el caso de uso más interesante de la persistencia políglota.
+Está partido entre los dos motores según la naturaleza del dato:
+
+### Mongo — `productos` (master data, casi estático)
+
+```js
+{ _id: "PRD001",
+  nombre: "Amoxicilina 250mg",
+  categoria: "Antibiótico",
+  precio_unit: 850,
+  vencimiento: ISODate("2026-06-30"),
+  proveedor: "VetFarma SA" }
+```
+
+Acá viven los atributos que cambian poco (precio, proveedor, vencimiento) y
+sobre los que tiene sentido hacer queries relacionales: "productos del
+proveedor X", "productos que vencen antes de Y", joins futuros con consultas
+para historial de consumo, etc. Indexado por `proveedor` y `vencimiento`.
+
+### Redis — `stock:unidades` (contador, alta volatilidad)
+
+Una sola estructura: un **Sorted Set** donde `score = unidades` y `value = id_producto`.
+
+```
+stock:unidades  (Sorted Set)
+   PRD017  score=15
+   PRD015  score=20
+   ...
+   PRD005  score=200
+```
+
+Esta única estructura cubre las tres operaciones que necesitamos:
+
+| Operación | Comando | Complejidad |
+|-----------|---------|-------------|
+| Leer unidades de un producto | `ZSCORE stock:unidades PRD001` | O(1) |
+| Listar productos con stock < N | `ZRANGEBYSCORE stock:unidades -inf N-1` | O(log n + k) |
+| Decrementar atómicamente | `ZINCRBY stock:unidades -3 PRD001` | O(log n) |
+
+El decremento de Q15 además se ejecuta dentro de un **script Lua** que en
+una sola operación atómica chequea existencia, valida stock suficiente y
+aplica el `ZINCRBY`. Esto elimina la ventana de race condition entre el
+check y el update.
+
+### ¿Por qué Lua y no `MULTI/EXEC` con transacciones?
+
+Las transacciones de Redis (`MULTI/EXEC`) garantizan que los comandos
+encolados se ejecuten de corrido sin interrupción, pero tienen un límite
+clave: **dentro de `MULTI/EXEC` no se puede leer un valor y decidir basado
+en él**. Todos los comandos se encolan antes del `EXEC`. Eso no nos
+alcanza: necesitamos leer el stock, validar que sea suficiente y recién
+ahí decidir si decrementamos.
+
+La forma de hacerlo con transacciones es agregar `WATCH` (concurrencia
+optimista): se vigila la clave, se lee el valor, se encola la escritura,
+y si la clave cambió entre el `WATCH` y el `EXEC` la transacción se aborta
+y hay que reintentar. 
+
+Funciona, pero comparado con Lua hay una falsa contención sobre el Sorted Set único. `WATCH` vigila la clave entera. Como `stock:unidades` contiene todos los productos en una sola
+clave, **cualquier decremento sobre cualquier producto aborta tu
+transacción aunque no tenga nada que ver con el producto que te
+interesa**. Cinco vets descontando productos distintos en paralelo
+terminan en loops de reintento peleando contra cambios irrelevantes.
+
+### Patrón políglota: Q8 (stock bajo + proveedor)
+
+Q8 muestra explícitamente el patrón cross-motor:
+
+1. **Redis** (`ZRANGEBYSCORE`) devuelve los IDs con bajo stock, ya ordenados por unidades ascendente.
+2. **Mongo** (`find({_id: {$in: ids}})`) trae el master data de esos productos.
+3. Se combinan en el resultado final.
+
+Cada motor hace lo que mejor hace: Redis el ranking instantáneo, Mongo la
+metadata estructurada.
+
+### ¿Por qué no usamos un Bloom filter?
+
+Un Bloom filter responde "¿pertenece X al conjunto?" con falsos positivos
+posibles, falsos negativos imposibles, y espacio constante. Es tentador
+para chequeos del estilo "¿hay stock?", pero no encaja en este dominio
+por tres razones:
+
+1. **Necesitamos cantidad, no presencia.** Un Bloom filter te dice
+   "probablemente sí" o "definitivamente no", pero no cuántas unidades hay.
+   Para validar `unidades >= cantidad_pedida` necesitamos el número exacto,
+   que es lo que el Sorted Set ya nos da en O(1) vía `ZSCORE`.
+
+2. **El "conjunto" cambia con cada decremento.** Los Bloom filters clásicos
+   no soportan borrado: si quisiéramos mantener un set "productos con
+   stock > 0" no podríamos sacar un producto cuando se agota sin perder
+   otros bits. Hay variantes (Counting Bloom Filter) que sí, pero ya son
+   esencialmente contadores aproximados — perdés el beneficio de espacio.
+
+3. **El catálogo es chico (~20 productos).** Los Bloom filters brillan cuando
+   el set es enorme y la mayoría de las consultas son misses (catálogos de
+   millones de SKUs, listas de URLs vistas, blacklists de fraude). Para 20
+   productos donde igual vamos a leer el contador real, el filtro agrega
+   complejidad sin ahorrar nada.
+
+Si en un futuro quisiéramos sumar capacidades avanzadas de Redis al dominio
+de stock, opciones más realistas serían **TTL** sobre claves para alertar
+productos próximos a vencer, o **Streams** (`XADD`) para emitir eventos
+"consulta cerrada" hacia procesos asíncronos.
+
+## Caché de queries (Redis como caché)
+
+Además de usar Redis como fuente de verdad para el stock, lo aprovechamos
+también como **caché de resultados** de las queries más caras. Esto suma
+otro patrón clásico de Redis (cache-aside con TTL) sin pisar el uso
+anterior.
+
+### Qué se cachea y por qué
+
+| Query | Por qué se cachea | TTL | Invalidada por |
+|-------|-------------------|-----|----------------|
+| **Q5** vets activos con consultas en 60 días | Aggregation con `$lookup` + filter por fecha sobre toda la colección | 300 s | Q14 (alta consulta) |
+| **Q7** top 5 diagnósticos | `$group` sobre toda la colección de consultas | 300 s | Q14 |
+| **Q11** ingresos por veterinario (mes actual) | Aggregation + lookup, leída con frecuencia | 60 s | Q14 |
+
+Las demás queries no se cachean porque:
+- Dependen de un parámetro variable (`historialPaciente(id)`, `pacientesPorSucursal(sucursal)`, `controlesBaratos(max)`) y cachear cada combinación tiene poco retorno.
+- Son baratas y no se ganaría mucho (`pacientesActivosConPropietario`, `topDiagnosticos` con poca data).
+- Devuelven datos sensibles al tiempo exacto (`pacientesConVacunasVencidas` filtra por `< hoy`).
+
+### Cómo funciona — patrón cache-aside
+
+```js
+async function cached(key, ttlSeconds, fn) {
+  const { redis } = await connect();
+  const hit = await redis.get(key);
+  if (hit !== null) return JSON.parse(hit);  // cache HIT
+  const value = await fn();                  // cache MISS -> Mongo
+  await redis.set(key, JSON.stringify(value), { EX: ttlSeconds });
+  return value;
+}
+```
+
+Cada query cacheada se envuelve así:
+```js
+export async function topDiagnosticos() {
+  return cached('cache:top-diagnosticos', 300, async () => {
+    const { db } = await connect();
+    return db.collection('consultas').aggregate([...]).toArray();
+  });
+}
+```
+
+### Invalidación
+
+Cuando se inserta una consulta nueva (Q14), las tres claves cacheadas
+quedan obsoletas — la nueva consulta podría afectar el ranking de
+diagnósticos, los ingresos del mes y el conteo por vet. Se borran
+explícitamente con `DEL`:
+
+```js
+await invalidate('cache:top-diagnosticos', 'cache:ingresos-vet-mes', 'cache:vets-consultas-60d');
+```
+
+La próxima llamada a cualquiera de esas queries será un cache miss
+(reconstruye y vuelve a cachear).
+
+### Convención de keys
+
+Todas las claves de caché empiezan con `cache:` para no chocar con las
+otras keys de Redis (`stock:unidades`). Esto permite limpiar selectivamente
+con `KEYS cache:*` sin tocar el contador de stock.
+
+### Endpoint de admin
+
+`POST /api/cache/flush` borra todas las keys `cache:*` y devuelve cuántas
+eliminó. Útil para demos o después de un reseed donde el TTL todavía no
+expiró.
+
+```bash
+curl -X POST http://localhost:3000/api/cache/flush
+# {"ok":true,"eliminadas":3}
+```
+
+### Cómo verlo en acción
+
+1. Llamar a `GET /api/top-diagnosticos` — primer hit cae a Mongo y cachea.
+2. Repetir la llamada — esta vez sale de Redis (notablemente más rápido).
+3. Inspeccionar Redis:
+   ```bash
+   docker exec -it vetsalud_redis redis-cli
+   > KEYS cache:*
+   > TTL cache:top-diagnosticos
+   > GET cache:top-diagnosticos
+   ```
+4. Crear una consulta nueva con `POST /api/consultas`.
+5. Volver a inspeccionar: las keys `cache:*` ya no están (fueron invalidadas).
+6. Volver a llamar a `GET /api/top-diagnosticos` — cache miss, se rearma.
 
 ## Cómo correrlo (GitHub Codespaces o local)
 
