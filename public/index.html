@@ -107,7 +107,16 @@
     }
     .toggle-json:hover { color: var(--fg); border-color: var(--fg); }
 
-    table.data { border-collapse: collapse; width: 100%; font-size: 13px; }
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    table.data {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 920px;
+      font-size: 13px;
+    }
     table.data th {
       text-align: left; padding: 8px 10px; font-weight: 600; color: var(--muted);
       border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .03em;
@@ -314,6 +323,32 @@
       <div class="grid">
 
         <div class="card">
+          <h3>Controles económicos<span class="pill">Q9</span></h3>
+          <p class="desc">Consultas tipo "Control" con costo menor al umbral. El umbral debe ser positivo.</p>
+          <div class="field">
+            <label for="maxCosto">Costo máximo ($)</label>
+            <input id="maxCosto" placeholder="5000" value="5000" type="number" min="1" />
+          </div>
+          <button class="action ghost" onclick="q9()">Buscar controles</button>
+        </div>
+
+        <div class="card">
+          <h3>Pacientes por sucursal<span class="pill">Q10</span></h3>
+          <p class="desc">Pacientes atendidos en una sucursal (vía consultas o vacunaciones de los vets de esa sucursal). Un paciente atendido en varias sucursales aparece en cada una.</p>
+          <div class="field">
+            <label for="sucursal">Sucursal</label>
+            <select id="sucursal">
+              <option>Palermo</option>
+              <option>Belgrano</option>
+              <option>Caballito</option>
+              <option>Recoleta</option>
+              <option>Núñez</option>
+            </select>
+          </div>
+          <button class="action ghost" onclick="q10()">Buscar</button>
+        </div>
+
+        <div class="card">
           <h3>Registrar consulta<span class="pill">Q14</span></h3>
           <p class="desc">Alta de consulta o cirugía. Valida que paciente y veterinario existan y estén activos. Opcionalmente descuenta stock.</p>
           <div class="row">
@@ -362,38 +397,46 @@
           <button class="action" onclick="q14()">Registrar consulta</button>
         </div>
 
-        <div class="card">
-          <h3>Pacientes por sucursal<span class="pill">Q10</span></h3>
-          <p class="desc">Pacientes atendidos en una sucursal (vía consultas o vacunaciones de los vets de esa sucursal). Un paciente atendido en varias sucursales aparece en cada una.</p>
-          <div class="field">
-            <label for="sucursal">Sucursal</label>
-            <select id="sucursal">
-              <option>Palermo</option>
-              <option>Belgrano</option>
-              <option>Caballito</option>
-              <option>Recoleta</option>
-              <option>Núñez</option>
-            </select>
-          </div>
-          <button class="action ghost" onclick="q10()">Buscar</button>
-        </div>
-
-        <div class="card">
-          <h3>Controles económicos<span class="pill">Q9</span></h3>
-          <p class="desc">Consultas tipo "Control" con costo menor al umbral. El umbral debe ser positivo.</p>
-          <div class="field">
-            <label for="maxCosto">Costo máximo ($)</label>
-            <input id="maxCosto" placeholder="5000" value="5000" type="number" min="1" />
-          </div>
-          <button class="action ghost" onclick="q9()">Buscar controles</button>
-        </div>
-
       </div>
     </section>
 
     <!-- ============= REPORTES ============= -->
     <section class="panel" id="panel-reportes">
       <div class="grid">
+
+        <div class="card">
+          <h3>Consultas en seguimiento<span class="pill">Q2</span></h3>
+          <p class="desc">Atenciones abiertas con veterinario asignado y costo.</p>
+          <button class="action" onclick="q2()">Ver seguimientos</button>
+        </div>
+
+        <div class="card">
+          <h3>Historial de paciente<span class="pill">Q3</span></h3>
+          <p class="desc">Unifica consultas y vacunaciones de un paciente, ordenadas por fecha descendente.</p>
+          <div class="field">
+            <label for="histPac">ID del paciente</label>
+            <input id="histPac" placeholder="P001" value="P001" />
+          </div>
+          <button class="action ghost" onclick="q3()">Ver historial</button>
+        </div>
+
+        <div class="card">
+          <h3>Propietarios con múltiples pacientes<span class="pill">Q4</span></h3>
+          <p class="desc">Dueños con más de una mascota registrada.</p>
+          <button class="action" onclick="q4()">Listar propietarios</button>
+        </div>
+
+        <div class="card">
+          <h3>Veterinarios activos 60d<span class="pill">Q5</span></h3>
+          <p class="desc">Veterinarios activos con el conteo de consultas de los últimos 60 días.</p>
+          <button class="action ghost" onclick="q5()">Ver ranking</button>
+        </div>
+
+        <div class="card">
+          <h3>Vacunas vencidas<span class="pill">Q6</span></h3>
+          <p class="desc">Pacientes cuya próxima dosis ya venció, agrupados por animal.</p>
+          <button class="action danger" onclick="q6()">Ver vencidas</button>
+        </div>
 
         <div class="card">
           <h3>Top 5 diagnósticos<span class="pill">Q7</span></h3>
@@ -449,6 +492,11 @@
         <h3>Consultas</h3>
         <div class="raw-list">
           <button onclick="q1()">Query 1 - Pacientes activos<span class="pill">GET</span></button>
+          <button onclick="q2()">Query 2 - Consultas en seguimiento<span class="pill">GET</span></button>
+          <button onclick="q3()">Query 3 - Historial de paciente<span class="pill">GET</span></button>
+          <button onclick="q4()">Query 4 - Propietarios con múltiples pacientes<span class="pill">GET</span></button>
+          <button onclick="q5()">Query 5 - Vets activos 60d<span class="pill">GET</span></button>
+          <button onclick="q6()">Query 6 - Vacunas vencidas<span class="pill">GET</span></button>
           <button onclick="q7()">Query 7 - Top diagnósticos<span class="pill">GET</span></button>
           <button onclick="q8()">Query 8 - Stock bajo<span class="pill">GET</span></button>
           <button onclick="q9()">Query 9 - Controles &lt; $5000<span class="pill">GET</span></button>
@@ -548,6 +596,7 @@
 
     function fmtVal(v) {
       if (v == null) return '<span style="color:#aaa">—</span>';
+      if (v instanceof Date) return v.toLocaleString('es-AR');
       if (typeof v === 'boolean') {
         return `<span class="badge ${v ? 'activo' : 'inactivo'}">${v ? 'activo' : 'inactivo'}</span>`;
       }
@@ -585,7 +634,7 @@
       const tbody = flat.map(r =>
         '<tr>' + cols.map(c => `<td>${fmtVal(r[c])}</td>`).join('') + '</tr>'
       ).join('');
-      return `<table class="data"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+      return `<div class="table-scroll"><table class="data"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
     }
 
     function renderObject(obj) {
@@ -612,12 +661,12 @@
         renderedHtml = renderObject(data);
       }
       const jsonStr = JSON.stringify(data, null, 2);
-      // If in raw mode (raw tab), show JSON by default; otherwise show rendered.
+      // Show the rendered table by default in every tab; JSON stays available via toggle.
       if (rawMode) {
         resBody.innerHTML =
-          `<div class="rendered" style="display:none">${renderedHtml}</div>` +
-          `<pre class="json">${escapeHtml(jsonStr)}</pre>`;
-        toggleBtn.textContent = 'Ver tabla';
+          `<div class="rendered">${renderedHtml}</div>` +
+          `<pre class="json hidden">${escapeHtml(jsonStr)}</pre>`;
+        toggleBtn.textContent = 'Ver JSON';
       } else {
         resBody.innerHTML =
           `<div class="rendered">${renderedHtml}</div>` +
@@ -658,6 +707,11 @@
 
     // ---------------- Query handlers ----------------
     function q1()  { run('Pacientes activos + propietario', 'GET', '/api/pacientes-activos'); }
+    function q2()  { run('Consultas en seguimiento', 'GET', '/api/consultas-seguimiento'); }
+    function q3()  { run(`Historial del paciente ${v('histPac')}`, 'GET', `/api/historial-paciente/${encodeURIComponent(v('histPac'))}`); }
+    function q4()  { run('Propietarios con múltiples pacientes', 'GET', '/api/propietarios-multiples-pacientes'); }
+    function q5()  { run('Veterinarios activos con consultas 60d', 'GET', '/api/vets-activos-consultas-60d'); }
+    function q6()  { run('Pacientes con vacunas vencidas', 'GET', '/api/pacientes-vacunas-vencidas'); }
     function q7()  { run('Top 5 diagnósticos', 'GET', '/api/top-diagnosticos'); }
     function q8()  { run(`Stock bajo (< ${v('umbral')} unidades)`, 'GET', `/api/stock-bajo?umbral=${v('umbral')}`); }
     function q9()  { run(`Controles con costo < $${v('maxCosto')}`, 'GET', `/api/controles-baratos?max=${v('maxCosto')}`); }
