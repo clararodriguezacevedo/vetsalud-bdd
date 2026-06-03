@@ -9,13 +9,25 @@ const app = express();
 app.use(express.json());
 app.use(express.static(join(__dirname, '..', 'public')));
 
-// Envuelve un handler async y maneja errores de forma uniforme
+// Envuelve un handler async, abre un contexto de caché por request, maneja
+// errores de forma uniforme, y emite el header X-Cache con los eventos de
+// caché que ocurrieron durante el request (formato 'HIT cache:key ttl=180'
+// o 'MISS cache:key ttl=300', múltiples eventos separados por coma).
 const wrap = (fn) => async (req, res) => {
-  try {
-    res.json(await fn(req));
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
+  await q.cacheCtx.run({ events: [] }, async () => {
+    try {
+      const result = await fn(req);
+      const { events } = q.cacheCtx.getStore();
+      if (events.length) {
+        res.set('X-Cache', events.map((e) => `${e.status} ${e.key} ttl=${e.ttl}`).join(', '));
+        // Header expuesto al frontend (CORS-friendly aunque sea same-origin)
+        res.set('Access-Control-Expose-Headers', 'X-Cache');
+      }
+      res.json(result);
+    } catch (e) {
+      res.status(400).json({ error: e.message });
+    }
+  });
 };
 
 // 1 - Pacientes activos con propietario

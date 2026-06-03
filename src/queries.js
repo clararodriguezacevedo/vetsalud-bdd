@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import { connect } from './db.js';
 
 // Las atenciones médicas estan en una sola colección 'consultas'
@@ -6,6 +7,12 @@ import { connect } from './db.js';
 //   - 'Cirugia'
 // Las vacunaciones quedan en su propia colección porque su estructura
 // difiere (sin costo, con proxima_dosis).
+
+// Contexto async para registrar eventos de caché por request.
+// El wrapper de express en server.js abre un store al recibir el request;
+// cached() empuja eventos {status: 'HIT'|'MISS', key, ttl}; el wrapper los
+// lee al final y los manda en el header 'X-Cache'.
+export const cacheCtx = new AsyncLocalStorage();
 
 // ---------------------------------------------------------------------
 // Caché (cache-aside con TTL sobre Redis)
@@ -19,7 +26,13 @@ import { connect } from './db.js';
 async function cached(key, ttlSeconds, fn) {
   const { redis } = await connect();
   const hit = await redis.get(key);
-  if (hit !== null) return JSON.parse(hit);
+  const ctx = cacheCtx.getStore();
+  if (hit !== null) {
+    const ttlRemaining = await redis.ttl(key);
+    if (ctx) ctx.events.push({ status: 'HIT', key, ttl: ttlRemaining });
+    return JSON.parse(hit);
+  }
+  if (ctx) ctx.events.push({ status: 'MISS', key, ttl: ttlSeconds });
   const value = await fn();
   await redis.set(key, JSON.stringify(value), { EX: ttlSeconds });
   return value;
@@ -523,11 +536,15 @@ export async function ingresosPorVetMesActual() {
   });
 }
 
-// 12 - Propietarios sin consultas registradas en el último año (Mongo)
-// Considera solo propietarios activos (los dados de baja ya no son clientes).
-// Incluye 'cantidad_mascotas' en el resultado para distinguir entre
-// propietarios sin pacientes y propietarios cuyos pacientes simplemente
-// no fueron atendidos en el período.
+// 12 - Propietarios "que necesitan atención" (Mongo)
+// Devuelve los propietarios que caen en alguna de estas categorías,
+// diferenciadas por el campo 'categoria':
+//   - 'Dado de baja'                 : activo = false
+//   - 'Sin mascotas'                 : activo = true, no tiene pacientes
+//   - 'Sin consultas en el último año': activo = true, tiene pacientes pero
+//                                       ninguno fue atendido en >12 meses
+// La precedencia es la del orden de arriba: un propietario inactivo aparece
+// como 'Dado de baja' aunque también podría haber estado en otra categoría.
 export async function propietariosSinConsultasUltimoAnio() {
   const { db } = await connect();
   const haceUnAnio = new Date();
@@ -535,7 +552,6 @@ export async function propietariosSinConsultasUltimoAnio() {
   return db
     .collection('propietarios')
     .aggregate([
-      { $match: { activo: true } },
       {
         $lookup: {
           from: 'pacientes',
@@ -563,14 +579,58 @@ export async function propietariosSinConsultasUltimoAnio() {
           as: 'consultasRecientes',
         },
       },
-      { $match: { consultasRecientes: { $size: 0 } } },
       {
-        $project: {
-          nombre: 1, apellido: 1, email: 1, ciudad: 1, provincia: 1,
+        $addFields: {
           cantidad_mascotas: { $size: '$pacientes' },
+          cantidad_consultas_recientes: { $size: '$consultasRecientes' },
         },
       },
-      { $sort: { cantidad_mascotas: -1, _id: 1 } },
+      // Nos quedamos solo con los que caen en alguna categoría
+      {
+        $match: {
+          $or: [
+            { activo: false },
+            { cantidad_mascotas: 0 },
+            { cantidad_consultas_recientes: 0 },
+          ],
+        },
+      },
+      // Clasificamos. El $switch evalúa en orden, asi que 'Dado de baja' gana.
+      {
+        $addFields: {
+          categoria: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$activo', false] }, then: 'Dado de baja' },
+                { case: { $eq: ['$cantidad_mascotas', 0] }, then: 'Sin mascotas' },
+              ],
+              default: 'Sin consultas en el último año',
+            },
+          },
+          // Orden interno para ordenar las categorías en el resultado
+          _orden_categoria: {
+            $switch: {
+              branches: [
+                { case: { $eq: ['$activo', false] }, then: 1 },
+                { case: { $eq: ['$cantidad_mascotas', 0] }, then: 2 },
+              ],
+              default: 3,
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          categoria: 1,
+          activo: 1,
+          nombre: 1, apellido: 1, email: 1, ciudad: 1, provincia: 1,
+          cantidad_mascotas: 1,
+          cantidad_consultas_recientes: 1,
+          _orden_categoria: 1,
+        },
+      },
+      { $sort: { _orden_categoria: 1, cantidad_mascotas: -1, _id: 1 } },
+      { $project: { _orden_categoria: 0 } },
     ])
     .toArray();
 }

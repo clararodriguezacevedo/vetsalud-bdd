@@ -206,6 +206,27 @@ Todas las claves de caché empiezan con `cache:` para no chocar con las
 otras keys de Redis (`stock:unidades`). Esto permite limpiar selectivamente
 con `KEYS cache:*` sin tocar el contador de stock.
 
+### Indicador HIT / MISS en el frontend
+
+Cada response de una query cacheada incluye el header HTTP **`X-Cache`** con
+el resultado de la operación:
+
+```
+X-Cache: HIT cache:top-diagnosticos ttl=180
+X-Cache: MISS cache:top-diagnosticos ttl=300
+```
+
+El frontend lee ese header en cada fetch y muestra un badge al lado del
+contador de resultados:
+- `cache HIT` (verde) — el resultado vino de Redis, con el TTL restante.
+- `cache MISS` (ámbar) — se ejecutó la query en Mongo y se guardó en Redis.
+
+En queries no cacheadas el header no se emite y no aparece ningún badge.
+
+La implementación usa `AsyncLocalStorage` de Node para asociar los eventos
+de caché con el request actual, lo cual evita race conditions entre
+requests concurrentes.
+
 ### Endpoint de admin
 
 `POST /api/cache/flush` borra todas las keys `cache:*` y devuelve cuántas

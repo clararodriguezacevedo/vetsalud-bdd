@@ -150,6 +150,14 @@
     .badge.activo { background: var(--accent-soft); color: var(--accent-dark); }
     .badge.inactivo { background: #fbeaea; color: #993333; }
 
+    /* Cache hit/miss badges en el meta del panel de resultados */
+    .cache-badge {
+      display: inline-block; padding: 1px 8px; border-radius: 10px;
+      font-size: 11px; font-weight: 600; letter-spacing: .02em;
+    }
+    .cache-badge.cache-hit  { background: #e1f5ee; color: #0f6e56; }
+    .cache-badge.cache-miss { background: #fff4dd; color: #8a5a00; }
+
     /* Form fields with labels */
     .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; min-width: 0; }
     .field label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
@@ -211,23 +219,6 @@
   <main>
     <!-- ============= PACIENTES Y PROPIETARIOS ============= -->
     <section class="panel active" id="panel-pacientes">
-      <div class="info-card">
-        <h4>Cómo distinguir los tres casos parecidos</h4>
-        <p><strong>1. Propietario dado de baja</strong> <span class="badge inactivo">activo: false</span>
-          — ya no es cliente. Su historial se preserva pero no aparece en operaciones nuevas
-          (Q14 rechaza consultas para él) ni en Q12 (no tiene sentido marcar como "inactivo" a alguien
-          que ya está dado de baja).</p>
-        <p><strong>2. Propietario sin mascotas</strong> <span class="badge activo">activo: true</span>,
-          0 pacientes — cliente vigente que no tiene ningún animal registrado. En Q12 aparece con
-          <code>cantidad_mascotas: 0</code>.</p>
-        <p><strong>3. Propietario con mascotas pero sin consultas recientes</strong>
-          <span class="badge activo">activo: true</span>, ≥1 paciente, sin atenciones en el último año
-          — el "cliente perdido" típico. En Q12 aparece con <code>cantidad_mascotas &gt; 0</code>.</p>
-        <p style="margin-top:10px"><strong>Sobre pacientes:</strong> <code>activo</code> es independiente
-          del estado del propietario. Una baja lógica de propietario no propaga a sus pacientes (Toto
-          puede seguir como paciente activo aunque su dueño se haya dado de baja). No hay ABM
-          de pacientes en este proyecto.</p>
-      </div>
 
       <div class="bento-pacientes">
 
@@ -240,7 +231,7 @@
 
           <div class="card">
             <h3>Propietarios inactivos<span class="pill">Q12</span></h3>
-            <p class="desc">Propietarios cuyos pacientes no tuvieron consultas en el último año.</p>
+            <p class="desc">Dados de baja, sin mascotas, o sin consultas en el último año.</p>
             <button class="action ghost" onclick="q12()">Listar inactivos</button>
           </div>
         </div>
@@ -659,17 +650,26 @@
       return renderTable([obj]);
     }
 
-    function show(title, data) {
+    function show(title, data, cacheEvents = []) {
       resTitle.textContent = title;
       lastRawJson = data;
       let renderedHtml;
+      const meta = [];
       if (Array.isArray(data)) {
-        resMeta.textContent = `${data.length} resultado${data.length === 1 ? '' : 's'}`;
+        meta.push(`${data.length} resultado${data.length === 1 ? '' : 's'}`);
         renderedHtml = renderTable(data);
       } else {
-        resMeta.textContent = '';
         renderedHtml = renderObject(data);
       }
+      // Badge de caché (si la query la usa)
+      cacheEvents.forEach((e) => {
+        const cls = e.status === 'HIT' ? 'cache-hit' : 'cache-miss';
+        const label = e.status === 'HIT'
+          ? `leído del caché (${e.key}, expira en ${e.ttl}s)`
+          : `sin caché previo - recalculado (${e.key}, guardado por ${e.ttl}s)`;
+        meta.push(`<span class="cache-badge ${cls}">${label}</span>`);
+      });
+      resMeta.innerHTML = meta.join(' · ');
       const jsonStr = JSON.stringify(data, null, 2);
       // Show the rendered table by default in every tab; JSON stays available via toggle.
       if (rawMode) {
@@ -693,12 +693,24 @@
       toggleBtn.style.display = 'none';
     }
 
-    // ---------------- Fetch helpers ----------------
+    // Devuelve { data, cache } donde cache es el contenido del header X-Cache
+    // (null si la query no usa caché).
     async function api(method, url, body) {
       const opts = { method, headers: { 'Content-Type': 'application/json' } };
       if (body) opts.body = JSON.stringify(body);
       const res = await fetch(url, opts);
-      return res.json();
+      const cache = res.headers.get('X-Cache');
+      return { data: await res.json(), cache };
+    }
+
+    // Parsea el header X-Cache en eventos 
+    function parseCacheHeader(raw) {
+      if (!raw) return [];
+      return raw.split(',').map((s) => s.trim()).filter(Boolean).map((s) => {
+        const m = s.match(/^(HIT|MISS)\s+(\S+)\s+ttl=(-?\d+)$/);
+        if (!m) return { status: 'INFO', key: s, ttl: null };
+        return { status: m[1], key: m[2].replace(/^cache:/, ''), ttl: Number(m[3]) };
+      });
     }
 
     async function run(title, method, url, body) {
@@ -707,7 +719,8 @@
       resBody.innerHTML = '<div class="empty">Cargando…</div>';
       toggleBtn.style.display = 'none';
       try {
-        show(title, await api(method, url, body));
+        const { data, cache } = await api(method, url, body);
+        show(title, data, parseCacheHeader(cache));
       } catch (e) {
         showError(title, e.message);
       }
