@@ -79,14 +79,22 @@
       background: var(--pill-bg); color: var(--pill-fg);
     }
 
-    /* Raw-query list */
-    .raw-list { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
-    .raw-list button {
-      text-align: left; padding: 10px 14px; background: #fff; border: 1px solid var(--line);
-      border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; color: var(--fg);
+    /* Raw queries panel */
+    .raw-endpoint { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--muted); }
+    .json-input {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+      font-size: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      background: #fff; resize: vertical; min-width: 0; line-height: 1.4;
     }
-    .raw-list button:hover { border-color: var(--accent); }
-    .raw-list button .pill { float: right; }
+    .json-input:focus { outline: none; border-color: var(--accent); }
+    .method-pill {
+      font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700;
+      letter-spacing: .03em; margin-right: 8px; vertical-align: middle;
+    }
+    .method-pill.get    { background: #e1f5ee; color: #0f6e56; }
+    .method-pill.post   { background: #fff4dd; color: #8a5a00; }
+    .method-pill.put    { background: #e6efff; color: #1e4d99; }
+    .method-pill.delete { background: #fbeaea; color: #993333; }
 
     /* Results panel */
     #results {
@@ -283,16 +291,29 @@
         <div class="stack">
           <div class="card">
             <h3>Modificar propietario<span class="pill">Q13</span></h3>
-            <p class="desc">Actualizar la ciudad de un propietario existente.</p>
+            <p class="desc">Actualizar un campo del propietario existente.</p>
             <div class="field">
               <label for="modId">ID del propietario</label>
               <input id="modId" placeholder="C007" value="C007" />
             </div>
             <div class="field">
-              <label for="modCiudad">Nueva ciudad</label>
-              <input id="modCiudad" placeholder="Rosario" value="Rosario" />
+              <label for="modCampo">Campo a modificar</label>
+              <select id="modCampo" onchange="onModCampoChange()">
+                <option value="nombre">Nombre</option>
+                <option value="apellido">Apellido</option>
+                <option value="dni">DNI</option>
+                <option value="email">Email</option>
+                <option value="telefono">Teléfono</option>
+                <option value="ciudad" selected>Ciudad</option>
+                <option value="provincia">Provincia</option>
+                <option value="activo">Estado (activo)</option>
+              </select>
             </div>
-            <button class="action ghost" onclick="q13Mod()">Modificar ciudad</button>
+            <div class="field" id="modValorContainer">
+              <label for="modValor">Nuevo valor</label>
+              <input id="modValor" placeholder="Rosario" value="Rosario" />
+            </div>
+            <button class="action ghost" onclick="q13Mod()">Modificar</button>
           </div>
 
           <div class="card">
@@ -479,27 +500,176 @@
 
     <!-- ============= RAW QUERIES ============= -->
     <section class="panel" id="panel-raw">
-      <div class="card">
-        <h3>Consultas</h3>
-        <div class="raw-list">
-          <button onclick="q1()">Query 1 - Pacientes activos<span class="pill">GET</span></button>
-          <button onclick="q2()">Query 2 - Consultas en seguimiento<span class="pill">GET</span></button>
-          <button onclick="q3()">Query 3 - Historial de paciente<span class="pill">GET</span></button>
-          <button onclick="q4()">Query 4 - Propietarios con múltiples pacientes<span class="pill">GET</span></button>
-          <button onclick="q5()">Query 5 - Vets activos 60d<span class="pill">GET</span></button>
-          <button onclick="q6()">Query 6 - Vacunas vencidas<span class="pill">GET</span></button>
-          <button onclick="q7()">Query 7 - Top diagnósticos<span class="pill">GET</span></button>
-          <button onclick="q8()">Query 8 - Stock bajo<span class="pill">GET</span></button>
-          <button onclick="q9()">Query 9 - Controles &lt; $5000<span class="pill">GET</span></button>
-          <button onclick="q10()">Query 10 - Pacientes por sucursal<span class="pill">GET</span></button>
-          <button onclick="q11()">Query 11 - Ingresos vet mes actual<span class="pill">GET</span></button>
-          <button onclick="q12()">Query 12 - Propietarios inactivos<span class="pill">GET</span></button>
-          <button onclick="q13Alta()">Query 13a - Alta propietario<span class="pill">POST</span></button>
-          <button onclick="q13Mod()">Query 13b - Modificar propietario<span class="pill">PUT</span></button>
-          <button onclick="q13Baja()">Query 13c - Baja lógica propietario<span class="pill">DEL</span></button>
-          <button onclick="q14()">Query 14 - Alta consulta<span class="pill">POST</span></button>
-          <button onclick="q15()">Query 15 - Decrementar stock<span class="pill">POST</span></button>
+      <div class="grid">
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q1 Pacientes activos</h3>
+          <p class="raw-endpoint">/api/pacientes-activos</p>
+          <button class="action" onclick="q1()">Ejecutar</button>
         </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q2 Consultas en seguimiento</h3>
+          <p class="raw-endpoint">/api/consultas-seguimiento</p>
+          <button class="action" onclick="q2()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q3 Historial de paciente</h3>
+          <p class="raw-endpoint">/api/historial-paciente/:id</p>
+          <div class="field">
+            <label for="rq3_id">ID del paciente</label>
+            <input id="rq3_id" value="P001" />
+          </div>
+          <button class="action" onclick="rawQ3()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q4 Propietarios con múltiples pacientes</h3>
+          <p class="raw-endpoint">/api/propietarios-multiples-pacientes</p>
+          <button class="action" onclick="q4()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q5 Vets activos con consultas 60d</h3>
+          <p class="raw-endpoint">/api/vets-activos-consultas-60d</p>
+          <button class="action" onclick="q5()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q6 Vacunas vencidas</h3>
+          <p class="raw-endpoint">/api/pacientes-vacunas-vencidas</p>
+          <button class="action" onclick="q6()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q7 Top 5 diagnósticos</h3>
+          <p class="raw-endpoint">/api/top-diagnosticos</p>
+          <button class="action" onclick="q7()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q8 Stock bajo</h3>
+          <p class="raw-endpoint">/api/stock-bajo?umbral=N</p>
+          <div class="field">
+            <label for="rq8_umbral">Umbral</label>
+            <input id="rq8_umbral" type="number" min="1" value="50" />
+          </div>
+          <button class="action" onclick="rawQ8()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q9 Controles baratos</h3>
+          <p class="raw-endpoint">/api/controles-baratos?max=N</p>
+          <div class="field">
+            <label for="rq9_max">Costo máximo ($)</label>
+            <input id="rq9_max" type="number" min="1" value="5000" />
+          </div>
+          <button class="action" onclick="rawQ9()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q10 Pacientes por sucursal</h3>
+          <p class="raw-endpoint">/api/pacientes-sucursal?sucursal=X</p>
+          <div class="field">
+            <label for="rq10_sucursal">Sucursal</label>
+            <input id="rq10_sucursal" value="Palermo" />
+          </div>
+          <button class="action" onclick="rawQ10()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q11 Ingresos por vet (mes actual)</h3>
+          <p class="raw-endpoint">/api/ingresos-vet-mes</p>
+          <button class="action" onclick="q11()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill get">GET</span>Q12 Propietarios inactivos</h3>
+          <p class="raw-endpoint">/api/propietarios-inactivos</p>
+          <button class="action" onclick="q12()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill post">POST</span>Q13a Alta propietario</h3>
+          <p class="raw-endpoint">/api/propietarios</p>
+          <div class="field">
+            <label for="rq13a_body">Body (JSON)</label>
+            <textarea id="rq13a_body" class="json-input" rows="9">{
+  "_id": "C100",
+  "nombre": "Test",
+  "apellido": "Prueba",
+  "dni": "44555666",
+  "email": "test@mail.com",
+  "telefono": "1144556677",
+  "ciudad": "CABA",
+  "provincia": "Buenos Aires"
+}</textarea>
+          </div>
+          <button class="action" onclick="rawQ13Alta()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill put">PUT</span>Q13b Modificar propietario</h3>
+          <p class="raw-endpoint">/api/propietarios/:id</p>
+          <div class="field">
+            <label for="rq13b_id">ID</label>
+            <input id="rq13b_id" value="C100" />
+          </div>
+          <div class="field">
+            <label for="rq13b_body">Body (JSON)</label>
+            <textarea id="rq13b_body" class="json-input" rows="4">{"ciudad": "Rosario"}</textarea>
+          </div>
+          <button class="action ghost" onclick="rawQ13Mod()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill delete">DELETE</span>Q13c Baja lógica propietario</h3>
+          <p class="raw-endpoint">/api/propietarios/:id</p>
+          <div class="field">
+            <label for="rq13c_id">ID</label>
+            <input id="rq13c_id" value="C100" />
+          </div>
+          <button class="action danger" onclick="rawQ13Baja()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill post">POST</span>Q14 Alta consulta</h3>
+          <p class="raw-endpoint">/api/consultas</p>
+          <div class="field">
+            <label for="rq14_body">Body (JSON)</label>
+            <textarea id="rq14_body" class="json-input" rows="12">{
+  "id_paciente": "P002",
+  "id_vet": "V003",
+  "tipo": "Consulta",
+  "motivo": "Control",
+  "diagnostico": "Sano",
+  "costo": 3000,
+  "estado": "Cerrada",
+  "productos_usados": [
+    { "id_producto": "PRD001", "cantidad": 2 }
+  ]
+}</textarea>
+          </div>
+          <button class="action" onclick="rawQ14()">Ejecutar</button>
+        </div>
+
+        <div class="card">
+          <h3><span class="method-pill post">POST</span>Q15 Decrementar stock</h3>
+          <p class="raw-endpoint">/api/decrementar-stock</p>
+          <div class="row">
+            <div class="field">
+              <label for="rq15_id">ID producto</label>
+              <input id="rq15_id" value="PRD001" />
+            </div>
+            <div class="field" style="flex:0 0 90px">
+              <label for="rq15_cant">Cantidad</label>
+              <input id="rq15_cant" type="number" min="1" value="3" />
+            </div>
+          </div>
+          <button class="action" onclick="rawQ15()">Ejecutar</button>
+        </div>
+
       </div>
     </section>
 
@@ -751,9 +921,32 @@
         ciudad: v('newCiudad'), provincia: v('newProv'),
       });
     }
+    function onModCampoChange() {
+      const campo = document.getElementById('modCampo').value;
+      const container = document.getElementById('modValorContainer');
+      if (campo === 'activo') {
+        container.innerHTML = `
+          <label for="modValor">Nuevo valor</label>
+          <select id="modValor">
+            <option value="true">activo (true)</option>
+            <option value="false">inactivo (false)</option>
+          </select>`;
+      } else {
+        const ph = { nombre: 'Lucía', apellido: 'Vega', dni: '40111222',
+                     email: 'lu@mail.com', telefono: '1144222333',
+                     ciudad: 'Rosario', provincia: 'Buenos Aires' }[campo] || '';
+        container.innerHTML = `
+          <label for="modValor">Nuevo valor</label>
+          <input id="modValor" placeholder="${ph}" value="${ph}" />`;
+      }
+    }
+
     function q13Mod() {
-      run(`Modificar propietario ${v('modId')}`, 'PUT', `/api/propietarios/${v('modId')}`, {
-        ciudad: v('modCiudad'),
+      const campo = v('modCampo');
+      let valor = v('modValor');
+      if (campo === 'activo') valor = (valor === 'true');
+      run(`Modificar ${v('modId')} (${campo})`, 'PUT', `/api/propietarios/${v('modId')}`, {
+        [campo]: valor,
       });
     }
     function q13Baja() {
@@ -800,6 +993,61 @@
       run(`Decremento de ${v('prodId')} (-${v('prodCant')})`, 'POST', '/api/decrementar-stock', {
         id_producto: v('prodId'),
         cantidad: Number(v('prodCant')),
+      });
+    }
+
+    // ---------------- Raw tab handlers ----------------
+    // Toman valores de inputs prefijados con 'rq' para no chocar con los del dashboard.
+    function parseJsonField(id) {
+      try { return JSON.parse(document.getElementById(id).value); }
+      catch (e) { throw new Error(`Body JSON inválido: ${e.message}`); }
+    }
+
+    function rawQ3() {
+      const id = v('rq3_id');
+      run(`Q3 Historial ${id}`, 'GET', `/api/historial-paciente/${encodeURIComponent(id)}`);
+    }
+    function rawQ8() {
+      const u = v('rq8_umbral');
+      run(`Q8 Stock bajo (< ${u})`, 'GET', `/api/stock-bajo?umbral=${u}`);
+    }
+    function rawQ9() {
+      const m = v('rq9_max');
+      run(`Q9 Controles (< $${m})`, 'GET', `/api/controles-baratos?max=${m}`);
+    }
+    function rawQ10() {
+      const s = v('rq10_sucursal');
+      run(`Q10 Pacientes sucursal ${s}`, 'GET', `/api/pacientes-sucursal?sucursal=${encodeURIComponent(s)}`);
+    }
+    function rawQ13Alta() {
+      try {
+        const body = parseJsonField('rq13a_body');
+        run(`Q13a Alta ${body._id || ''}`, 'POST', '/api/propietarios', body);
+      } catch (e) { showError('Q13a Alta', e.message); }
+    }
+    function rawQ13Mod() {
+      try {
+        const id = v('rq13b_id');
+        const body = parseJsonField('rq13b_body');
+        run(`Q13b Modificar ${id}`, 'PUT', `/api/propietarios/${id}`, body);
+      } catch (e) { showError('Q13b Modificar', e.message); }
+    }
+    function rawQ13Baja() {
+      const id = v('rq13c_id');
+      run(`Q13c Baja ${id}`, 'DELETE', `/api/propietarios/${id}`);
+    }
+    function rawQ14() {
+      try {
+        const body = parseJsonField('rq14_body');
+        run('Q14 Alta consulta', 'POST', '/api/consultas', body);
+      } catch (e) { showError('Q14 Alta consulta', e.message); }
+    }
+    function rawQ15() {
+      const id = v('rq15_id');
+      const cant = v('rq15_cant');
+      run(`Q15 Decremento ${id} (-${cant})`, 'POST', '/api/decrementar-stock', {
+        id_producto: id,
+        cantidad: Number(cant),
       });
     }
   </script>
