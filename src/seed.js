@@ -63,6 +63,42 @@ async function main() {
     estado: r.estado,
   }));
 
+  // Inyectar consultas del mes en curso para que Q11 (ingresos del mes
+  // actual) siempre tenga datos. Las fechas se generan relativas a 'hoy'
+  // así no hace falta editar CSVs cada vez.
+  const ahora = new Date();
+  const año = ahora.getFullYear();
+  const mes = ahora.getMonth();
+  const diaActual = ahora.getDate();
+  const ultimoId = consultas.reduce(
+    (max, c) => Math.max(max, Number(String(c._id).replace(/\D/g, ''))), 0,
+  );
+  const extras = [
+    { paciente: 'P001', vet: 'V001', costo: 4500, motivo: 'Control mensual', diagnostico: 'Sano', tipo: 'Consulta' },
+    { paciente: 'P002', vet: 'V003', costo: 5500, motivo: 'Alergia', diagnostico: 'Dermatitis atópica', tipo: 'Consulta' },
+    { paciente: 'P004', vet: 'V001', costo: 3200, motivo: 'Control', diagnostico: 'Sano', tipo: 'Consulta' },
+    { paciente: 'P005', vet: 'V002', costo: 18000, motivo: 'Esterilización', diagnostico: 'Cirugía exitosa', tipo: 'Cirugia' },
+    { paciente: 'P006', vet: 'V003', costo: 3800, motivo: 'Picazón', diagnostico: 'Otitis externa', tipo: 'Consulta' },
+    { paciente: 'P008', vet: 'V007', costo: 4200, motivo: 'Plumas decaídas', diagnostico: 'Carencia nutricional', tipo: 'Consulta' },
+    { paciente: 'P009', vet: 'V001', costo: 3200, motivo: 'Pulgas', diagnostico: 'Infestación parasitaria', tipo: 'Consulta' },
+    { paciente: 'P014', vet: 'V006', costo: 25000, motivo: 'Tumor cutáneo', diagnostico: 'Resección de masa', tipo: 'Cirugia' },
+    { paciente: 'P017', vet: 'V001', costo: 4100, motivo: 'Otitis', diagnostico: 'Otitis externa', tipo: 'Consulta' },
+  ];
+  extras.forEach((e, i) => {
+    const dia = Math.max(1, Math.min(diaActual, 28) - i);
+    consultas.push({
+      _id: 'CON' + String(ultimoId + i + 1).padStart(3, '0'),
+      id_paciente: e.paciente,
+      id_vet: e.vet,
+      fecha: new Date(año, mes, dia),
+      tipo: e.tipo,
+      motivo: e.motivo,
+      diagnostico: e.diagnostico,
+      costo: e.costo,
+      estado: 'Cerrada',
+    });
+  });
+
   const vacunaciones = readCsv('vacunaciones.csv').map((r) => ({
     _id: r.id_vacuna,
     id_paciente: r.id_paciente,

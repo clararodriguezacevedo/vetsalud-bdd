@@ -140,6 +140,20 @@
     table.data tr:hover td { background: #fafbfa; }
     table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
 
+    /* Mini-tabla embebida en celdas (para arrays de objetos) */
+    table.nested-table {
+      border-collapse: collapse; background: #fafbfa; border-radius: 4px;
+      margin: -2px 0; font-size: 11px;
+    }
+    table.nested-table th, table.nested-table td {
+      padding: 3px 8px; border-bottom: 1px solid #f0f2ef; text-align: left;
+    }
+    table.nested-table th {
+      font-weight: 600; color: var(--muted); font-size: 9px;
+      text-transform: uppercase; letter-spacing: .03em; white-space: nowrap;
+    }
+    table.nested-table tr:last-child td { border-bottom: none; }
+
     pre.json {
       background: #0f1512; color: #c8e6d8; padding: 16px; border-radius: 8px;
       font-size: 12px; line-height: 1.5; overflow: auto; max-height: 480px;
@@ -762,6 +776,19 @@
         return `<span class="badge ${v ? 'activo' : 'inactivo'}">${v ? 'activo' : 'inactivo'}</span>`;
       }
       if (typeof v === 'number') return `<span class="num">${v.toLocaleString('es-AR')}</span>`;
+      // Array de objetos -> mini tabla embebida en la celda
+      if (Array.isArray(v)) {
+        if (v.length === 0) return '<span style="color:#aaa">—</span>';
+        if (typeof v[0] === 'object' && v[0] !== null) {
+          const cols = [...new Set(v.flatMap(o => Object.keys(o || {})))];
+          const thead = cols.map(c => `<th>${prettyKey(c)}</th>`).join('');
+          const tbody = v.map(o =>
+            '<tr>' + cols.map(c => `<td>${fmtVal(o[c])}</td>`).join('') + '</tr>'
+          ).join('');
+          return `<table class="nested-table"><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>`;
+        }
+        return v.map(item => escapeHtml(String(item))).join(', ');
+      }
       if (typeof v === 'object') {
         if (v.$date) return new Date(v.$date).toLocaleDateString('es-AR');
         return escapeHtml(JSON.stringify(v));

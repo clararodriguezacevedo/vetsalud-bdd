@@ -225,12 +225,27 @@ export async function historialPaciente(idPaciente) {
 }
 
 // 4 - Propietarios con más de un paciente registrado (Mongo)
+// Incluye la lista de pacientes de cada propietario en el resultado.
 export async function propietariosConMultiplesPacientes() {
   const { db } = await connect();
   return db
     .collection('pacientes')
     .aggregate([
-      { $group: { _id: '$id_propietario', cantidad_pacientes: { $sum: 1 } } },
+      {
+        $group: {
+          _id: '$id_propietario',
+          cantidad_pacientes: { $sum: 1 },
+          pacientes: {
+            $push: {
+              _id: '$_id',
+              nombre: '$nombre',
+              especie: '$especie',
+              raza: '$raza',
+              activo: '$activo',
+            },
+          },
+        },
+      },
       { $match: { cantidad_pacientes: { $gt: 1 } } },
       {
         $lookup: {
@@ -256,6 +271,7 @@ export async function propietariosConMultiplesPacientes() {
             provincia: '$propietario.provincia',
             activo: '$propietario.activo',
           },
+          pacientes: 1,
         },
       },
       { $sort: { cantidad_pacientes: -1, id_propietario: 1 } },
@@ -312,6 +328,7 @@ export async function veterinariosActivosConConsultas60d() {
 }
 
 // 6 - Pacientes con vacunas vencidas (Mongo)
+// Devuelve un registro por paciente con la lista de sus vacunas vencidas.
 export async function pacientesConVacunasVencidas() {
   const { db } = await connect();
   const hoy = new Date();
@@ -345,20 +362,8 @@ export async function pacientesConVacunasVencidas() {
       },
       { $unwind: '$paciente' },
       {
-        $lookup: {
-          from: 'propietarios',
-          localField: 'paciente.id_propietario',
-          foreignField: '_id',
-          as: 'propietario',
-        },
-      },
-      { $unwind: '$propietario' },
-      {
         $project: {
           _id: 0,
-          id_paciente: '$_id',
-          cantidad_vacunas_vencidas: 1,
-          proxima_dosis_mas_antigua: 1,
           paciente: {
             _id: '$paciente._id',
             nombre: '$paciente.nombre',
@@ -366,20 +371,12 @@ export async function pacientesConVacunasVencidas() {
             raza: '$paciente.raza',
             activo: '$paciente.activo',
           },
-          propietario: {
-            _id: '$propietario._id',
-            nombre: '$propietario.nombre',
-            apellido: '$propietario.apellido',
-            email: '$propietario.email',
-            telefono: '$propietario.telefono',
-            ciudad: '$propietario.ciudad',
-            provincia: '$propietario.provincia',
-            activo: '$propietario.activo',
-          },
+          cantidad_vacunas_vencidas: 1,
+          proxima_dosis_mas_antigua: 1,
           vacunas_vencidas: 1,
         },
       },
-      { $sort: { proxima_dosis_mas_antigua: 1, id_paciente: 1 } },
+      { $sort: { proxima_dosis_mas_antigua: 1, 'paciente._id': 1 } },
     ])
     .toArray();
 }
