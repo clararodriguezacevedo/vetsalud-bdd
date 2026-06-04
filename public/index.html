@@ -13,12 +13,14 @@
     }
     * { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: var(--bg); color: var(--fg); }
+
     header {
       padding: 18px 32px; border-bottom: 1px solid var(--line); background: #fff;
       display: flex; align-items: center; justify-content: space-between;
     }
     header h1 { margin: 0; font-size: 18px; font-weight: 600; }
     header .sub { color: var(--muted); font-size: 13px; }
+
     nav.tabs {
       display: flex; gap: 4px; padding: 0 32px; background: #fff;
       border-bottom: 1px solid var(--line);
@@ -35,52 +37,133 @@
     .panel { display: none; }
     .panel.active { display: block; }
 
-    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); }
-
-    .bento-pacientes {
-      display: grid; gap: 16px;
-      grid-template-columns: repeat(3, 1fr);
-      align-items: stretch;
+    /* Section header */
+    .section-title {
+      font-size: 20px; font-weight: 700; color: var(--fg);
+      margin: 36px 0 16px;
     }
-    .bento-pacientes > .stack {
+    .section-title:first-child { margin-top: 0; }
+
+    /* Grid estándar. Sin 'align-items: start': cards de la misma fila
+       se estiran a la altura de la más alta. */
+    .grid {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    /* Bento 2 columnas: 4 cards apiladas a la izquierda + 1 card alta a la derecha.
+       Las columnas se estiran a la altura de la más alta (align-items: stretch
+       por defecto en grid). Las cards de la izquierda se distribuyen equitativamente
+       para llenar el espacio. */
+    .bento-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .bento-left {
       display: flex; flex-direction: column; gap: 16px;
     }
-    .bento-pacientes > .stack > .card { flex: 1; }
+    .bento-left > .card { flex: 1; }
+    @media (max-width: 800px) {
+      .bento-2col { grid-template-columns: 1fr; }
+      .bento-left > .card { flex: initial; }
+    }
 
     .card {
       background: var(--card); border: 1px solid var(--line); border-radius: 10px;
       padding: 16px 18px;
+      display: flex; flex-direction: column;
+      position: relative;
     }
-    .card h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
-    .card p.desc { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
-
-    .row { display: flex; gap: 8px; margin-bottom: 8px; }
-    .row input, .row select {
-      flex: 1; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
-      font-size: 13px; font-family: inherit; min-width: 0;
+    .card h3 {
+      margin: 0 0 12px; font-size: 14px; font-weight: 600;
+      padding-right: 36px; /* hueco para el card-number en la esquina */
     }
-    .row input:focus, .row select:focus { outline: none; border-color: var(--accent); }
-
-    button.action {
-      padding: 8px 14px; border: 1px solid var(--accent); background: var(--accent);
-      color: #fff; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
-      font-family: inherit;
-    }
-    button.action:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
-    button.action.ghost { background: #fff; color: var(--accent-dark); }
-    button.action.ghost:hover { background: var(--accent-soft); }
-    button.action.danger { background: #fff; color: #b94a4a; border-color: #e9c8c8; }
-    button.action.danger:hover { background: #fbeaea; }
-    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
-
-    .pill {
-      display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 10px;
-      margin-left: 6px; vertical-align: middle; font-weight: 600;
+    .card-number {
+      position: absolute; top: 12px; right: 14px;
+      font-size: 10px; font-weight: 700;
+      padding: 2px 8px; border-radius: 10px;
       background: var(--pill-bg); color: var(--pill-fg);
+      letter-spacing: .03em;
+    }
+    .card .spacer { display: none; }
+    /* Botón principal al pie del card cuando es el último hijo directo */
+    .card > button.action {
+      align-self: flex-start;
+      margin-top: auto;
     }
 
-    /* Raw queries panel */
-    .raw-endpoint { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--muted); }
+    /* Form fields */
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; min-width: 0; }
+    .field label {
+      font-size: 10px; color: var(--muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .field input, .field select {
+      padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+      font-size: 13px; font-family: inherit; min-width: 0; background: #fff;
+    }
+    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+
+    .row { display: flex; gap: 8px; margin-bottom: 0; }
+    .row .field { flex: 1; margin-bottom: 10px; }
+
+    /* Buttons - outline por defecto. Destructivos quedan en outline rojo. */
+    button.action {
+      padding: 8px 14px; border: 1px solid var(--accent); background: #fff;
+      color: var(--accent-dark); border-radius: 6px; cursor: pointer;
+      font-size: 13px; font-weight: 500; font-family: inherit;
+    }
+    button.action:hover { background: var(--accent-soft); }
+    button.action.ghost { /* alias: mismo estilo que .action */ }
+    button.action.danger {
+      color: #b94a4a; border-color: #e9c8c8; background: #fff;
+    }
+    button.action.danger:hover { background: #fbeaea; }
+
+    /* Sub-tabs (dentro de un card, ej: ABM propietarios) */
+    .subtabs {
+      display: flex; gap: 0; margin: -2px 0 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .subtab-btn {
+      background: transparent; border: none; padding: 8px 14px;
+      font-size: 12px; font-family: inherit; color: var(--muted);
+      cursor: pointer; border-bottom: 2px solid transparent;
+      font-weight: 600; margin-bottom: -1px;
+    }
+    .subtab-btn:hover { color: var(--fg); }
+    .subtab-btn.active { color: var(--accent-dark); border-bottom-color: var(--accent); }
+    .subpanel { display: none; }
+    .subpanel.active { display: block; }
+
+    /* Productos dynamic list */
+    .producto-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+    .producto-row input {
+      padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
+      font-size: 13px; font-family: inherit; min-width: 0; background: #fff;
+    }
+    .producto-row .prod-id { flex: 1; }
+    .producto-row .prod-cant { width: 70px; flex-shrink: 0; }
+    .btn-icon {
+      width: 28px; height: 28px; border: 1px solid var(--line); background: #fff;
+      border-radius: 6px; cursor: pointer; color: var(--muted); padding: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; line-height: 1; flex-shrink: 0; font-family: inherit;
+    }
+    .btn-icon:hover { background: #fbeaea; color: #b94a4a; border-color: #e9c8c8; }
+    .btn-add {
+      width: 100%; background: #fff; border: 1px dashed var(--line); color: var(--muted);
+      padding: 7px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit;
+      margin-bottom: 10px; font-weight: 500;
+    }
+    .btn-add:hover { border-color: var(--accent); color: var(--accent-dark); }
+
+    /* Queries tab (raw) */
+    .raw-endpoint {
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 11px; color: var(--muted); margin: -8px 0 12px;
+    }
     .json-input {
       width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
       font-size: 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -89,7 +172,7 @@
     .json-input:focus { outline: none; border-color: var(--accent); }
     .method-pill {
       font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700;
-      letter-spacing: .03em; margin-right: 8px; vertical-align: middle;
+      letter-spacing: .03em; margin: 0 6px 0 0; display: inline-block;
     }
     .method-pill.get    { background: #e1f5ee; color: #0f6e56; }
     .method-pill.post   { background: #fff4dd; color: #8a5a00; }
@@ -98,7 +181,7 @@
 
     /* Results panel */
     #results {
-      margin-top: 24px; background: var(--card); border: 1px solid var(--line);
+      margin-top: 32px; background: var(--card); border: 1px solid var(--line);
       border-radius: 10px; padding: 0; overflow: hidden;
     }
     #results .head {
@@ -115,16 +198,8 @@
     }
     .toggle-json:hover { color: var(--fg); border-color: var(--fg); }
 
-    .table-scroll {
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    table.data {
-      border-collapse: collapse;
-      width: 100%;
-      min-width: 920px;
-      font-size: 13px;
-    }
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.data { border-collapse: collapse; width: 100%; min-width: 920px; font-size: 13px; }
     table.data th {
       text-align: left; padding: 8px 10px; font-weight: 600; color: var(--muted);
       border-bottom: 1px solid var(--line); text-transform: uppercase; letter-spacing: .03em;
@@ -134,13 +209,11 @@
       display: block; font-size: 9px; color: #a0a8a3; font-weight: 500;
       text-transform: uppercase; margin-top: 2px;
     }
-    table.data td {
-      padding: 9px 10px; border-bottom: 1px solid #f0f2ef; vertical-align: top;
-    }
+    table.data td { padding: 9px 10px; border-bottom: 1px solid #f0f2ef; vertical-align: top; }
     table.data tr:hover td { background: #fafbfa; }
     table.data .num { text-align: right; font-variant-numeric: tabular-nums; }
 
-    /* Mini-tabla embebida en celdas (para arrays de objetos) */
+    /* Nested table (arrays de objetos en celdas) */
     table.nested-table {
       border-collapse: collapse; background: #fafbfa; border-radius: 4px;
       margin: -2px 0; font-size: 11px;
@@ -172,143 +245,122 @@
     .badge.activo { background: var(--accent-soft); color: var(--accent-dark); }
     .badge.inactivo { background: #fbeaea; color: #993333; }
 
-    /* Cache hit/miss badges en el meta del panel de resultados */
+    /* Cache hit/miss badges */
     .cache-badge {
       display: inline-block; padding: 1px 8px; border-radius: 10px;
       font-size: 11px; font-weight: 600; letter-spacing: .02em;
     }
     .cache-badge.cache-hit  { background: #e1f5ee; color: #0f6e56; }
     .cache-badge.cache-miss { background: #fff4dd; color: #8a5a00; }
-
-    /* Form fields with labels */
-    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; min-width: 0; }
-    .field label { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
-    .field input, .field select {
-      padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
-      font-size: 13px; font-family: inherit; min-width: 0; background: #fff;
-    }
-    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
-    .row .field { flex: 1; margin-bottom: 0; }
-
-    /* Info banner */
-    .info-card {
-      background: var(--accent-soft); border: 1px solid #c4e3d6; border-radius: 10px;
-      padding: 14px 18px; margin-bottom: 16px; font-size: 13px; color: var(--accent-dark);
-    }
-    .info-card h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; }
-    .info-card p { margin: 6px 0; line-height: 1.5; }
-    .info-card .badge { margin-right: 4px; }
-
-    /* Productos dynamic list */
-    .producto-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-    .producto-row input {
-      padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px;
-      font-size: 13px; font-family: inherit; min-width: 0; background: #fff;
-    }
-    .producto-row .prod-id { flex: 1; }
-    .producto-row .prod-cant { width: 70px; flex-shrink: 0; }
-    .btn-icon {
-      width: 28px; height: 28px; border: 1px solid var(--line); background: #fff;
-      border-radius: 6px; cursor: pointer; color: var(--muted); padding: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; line-height: 1; flex-shrink: 0; font-family: inherit;
-    }
-    .btn-icon:hover { background: #fbeaea; color: #b94a4a; border-color: #e9c8c8; }
-    .btn-add {
-      width: 100%; background: #fff; border: 1px dashed var(--line); color: var(--muted);
-      padding: 7px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit;
-      margin-bottom: 10px; font-weight: 500;
-    }
-    .btn-add:hover { border-color: var(--accent); color: var(--accent-dark); }
   </style>
 </head>
 <body>
   <header>
-    <div>
-      <h1>VetSalud</h1>
-    </div>
+    <h1>VetSalud</h1>
     <div class="sub" id="serverTime"></div>
   </header>
 
   <nav class="tabs">
-    <button class="active" data-tab="pacientes">Pacientes y propietarios</button>
-    <button data-tab="consultas">Turnos</button>
-    <button data-tab="reportes">Reportes</button>
-    <button data-tab="stock">Stock</button>
-    <button data-tab="raw">Queries</button>
+    <button class="active" data-tab="dashboard">Dashboard</button>
+    <button data-tab="queries">Queries</button>
   </nav>
 
   <main>
-    <!-- ============= PACIENTES Y PROPIETARIOS ============= -->
-    <section class="panel active" id="panel-pacientes">
 
-      <div class="bento-pacientes">
+    <!-- ================================================================ -->
+    <!--                            DASHBOARD                              -->
+    <!-- ================================================================ -->
+    <section class="panel active" id="panel-dashboard">
 
-        <div class="stack">
+      <!-- ==== Pacientes y propietarios ==== -->
+      <div class="section-title">Pacientes y propietarios</div>
+      <div class="bento-2col">
+
+        <div class="bento-left">
           <div class="card">
-            <h3>Ver pacientes activos<span class="pill">Q1</span></h3>
-            <p class="desc">Listado de pacientes con sus datos y los del propietario.</p>
-            <button class="action" onclick="q1()">Listar pacientes activos</button>
+            <span class="card-number">1</span>
+            <h3>Pacientes activos</h3>
+            <button class="action" onclick="q1()">Listar</button>
           </div>
 
           <div class="card">
-            <h3>Propietarios inactivos<span class="pill">Q12</span></h3>
-            <p class="desc">Dados de baja, sin mascotas, o sin consultas en el último año.</p>
-            <button class="action ghost" onclick="q12()">Listar inactivos</button>
+            <span class="card-number">4</span>
+            <h3>Propietarios con múltiples pacientes</h3>
+            <button class="action" onclick="q4()">Listar</button>
+          </div>
+
+          <div class="card">
+            <span class="card-number">12</span>
+            <h3>Propietarios a revisar</h3>
+            <button class="action ghost" onclick="q12()">Listar</button>
+          </div>
+
+          <div class="card">
+            <span class="card-number">3</span>
+            <h3>Historial de paciente</h3>
+            <div class="field">
+              <label for="histPac">ID del paciente</label>
+              <input id="histPac" value="P001" />
+            </div>
+            <button class="action ghost" onclick="q3()">Ver historial</button>
           </div>
         </div>
 
         <div class="card">
-          <h3>Alta de propietario<span class="pill">Q13</span></h3>
-          <p class="desc">Registrar un nuevo propietario.</p>
-          <div class="field">
-            <label for="newId">ID del propietario</label>
-            <input id="newId" placeholder="C007" value="C007" />
+          <span class="card-number">13</span>
+          <h3>ABM Propietarios</h3>
+          <div class="subtabs">
+            <button class="subtab-btn active" data-subtab="alta">Alta</button>
+            <button class="subtab-btn" data-subtab="mod">Modificar</button>
+            <button class="subtab-btn" data-subtab="baja">Baja</button>
           </div>
-          <div class="row">
-            <div class="field">
-              <label for="newNombre">Nombre</label>
-              <input id="newNombre" placeholder="Lucía" value="Lucía" />
-            </div>
-            <div class="field">
-              <label for="newApellido">Apellido</label>
-              <input id="newApellido" placeholder="Vega" value="Vega" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="field">
-              <label for="newDni">DNI</label>
-              <input id="newDni" placeholder="40111222" value="40111222" />
-            </div>
-            <div class="field">
-              <label for="newTel">Teléfono</label>
-              <input id="newTel" placeholder="1144 222 333" value="1144222333" />
-            </div>
-          </div>
-          <div class="field">
-            <label for="newEmail">Email</label>
-            <input id="newEmail" placeholder="lu@mail.com" value="lu@mail.com" />
-          </div>
-          <div class="row">
-            <div class="field">
-              <label for="newCiudad">Ciudad</label>
-              <input id="newCiudad" placeholder="CABA" value="CABA" />
-            </div>
-            <div class="field">
-              <label for="newProv">Provincia</label>
-              <input id="newProv" placeholder="Buenos Aires" value="Buenos Aires" />
-            </div>
-          </div>
-          <button class="action" onclick="q13Alta()">Crear propietario</button>
-        </div>
 
-        <div class="stack">
-          <div class="card">
-            <h3>Modificar propietario<span class="pill">Q13</span></h3>
-            <p class="desc">Actualizar un campo del propietario existente.</p>
+          <div class="subpanel active" data-subpanel="alta">
+            <div class="field">
+              <label for="newId">ID</label>
+              <input id="newId" value="C100" />
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="newNombre">Nombre</label>
+                <input id="newNombre" value="Lucía" />
+              </div>
+              <div class="field">
+                <label for="newApellido">Apellido</label>
+                <input id="newApellido" value="Vega" />
+              </div>
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="newDni">DNI</label>
+                <input id="newDni" value="40111222" />
+              </div>
+              <div class="field">
+                <label for="newTel">Teléfono</label>
+                <input id="newTel" value="1144222333" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="newEmail">Email</label>
+              <input id="newEmail" value="lu@mail.com" />
+            </div>
+            <div class="row">
+              <div class="field">
+                <label for="newCiudad">Ciudad</label>
+                <input id="newCiudad" value="CABA" />
+              </div>
+              <div class="field">
+                <label for="newProv">Provincia</label>
+                <input id="newProv" value="Buenos Aires" />
+              </div>
+            </div>
+            <button class="action" onclick="q13Alta()">Crear propietario</button>
+          </div>
+
+          <div class="subpanel" data-subpanel="mod">
             <div class="field">
               <label for="modId">ID del propietario</label>
-              <input id="modId" placeholder="C007" value="C007" />
+              <input id="modId" value="C100" />
             </div>
             <div class="field">
               <label for="modCampo">Campo a modificar</label>
@@ -325,66 +377,77 @@
             </div>
             <div class="field" id="modValorContainer">
               <label for="modValor">Nuevo valor</label>
-              <input id="modValor" placeholder="Rosario" value="Rosario" />
+              <input id="modValor" value="Rosario" />
             </div>
             <button class="action ghost" onclick="q13Mod()">Modificar</button>
           </div>
 
-          <div class="card">
-            <h3>Baja lógica<span class="pill">Q13</span></h3>
-            <p class="desc">Marcar al propietario como inactivo. Sus pacientes se conservan.</p>
+          <div class="subpanel" data-subpanel="baja">
             <div class="field">
               <label for="bajaId">ID del propietario</label>
-              <input id="bajaId" placeholder="C007" value="C007" />
+              <input id="bajaId" value="C100" />
             </div>
             <button class="action danger" onclick="q13Baja()">Dar de baja</button>
           </div>
         </div>
 
       </div>
-    </section>
 
-    <!-- ============= CONSULTAS ============= -->
-    <section class="panel" id="panel-consultas">
-      <div class="grid">
+      <!-- ==== Atenciones ==== -->
+      <div class="section-title">Atenciones</div>
+      <div class="bento-2col">
 
-        <div class="card">
-          <h3>Controles económicos<span class="pill">Q9</span></h3>
-          <p class="desc">Consultas tipo "Control" con costo menor al umbral. El umbral debe ser positivo.</p>
-          <div class="field">
-            <label for="maxCosto">Costo máximo ($)</label>
-            <input id="maxCosto" placeholder="5000" value="5000" type="number" min="1" />
+        <div class="bento-left">
+          <div class="card">
+            <span class="card-number">2</span>
+            <h3>Consultas en seguimiento</h3>
+            <button class="action" onclick="q2()">Listar</button>
           </div>
-          <button class="action ghost" onclick="q9()">Buscar controles</button>
+
+          <div class="card">
+            <span class="card-number">6</span>
+            <h3>Vacunas vencidas</h3>
+            <button class="action danger" onclick="q6()">Listar</button>
+          </div>
+
+          <div class="card">
+            <span class="card-number">9</span>
+            <h3>Controles económicos</h3>
+            <div class="field">
+              <label for="maxCosto">Costo máximo ($)</label>
+              <input id="maxCosto" type="number" min="1" value="5000" />
+            </div>
+            <button class="action ghost" onclick="q9()">Buscar</button>
+          </div>
+
+          <div class="card">
+            <span class="card-number">10</span>
+            <h3>Pacientes por sucursal</h3>
+            <div class="field">
+              <label for="sucursal">Sucursal</label>
+              <select id="sucursal">
+                <option>Palermo</option>
+                <option>Belgrano</option>
+                <option>Caballito</option>
+                <option>Recoleta</option>
+                <option>Núñez</option>
+              </select>
+            </div>
+            <button class="action ghost" onclick="q10()">Buscar</button>
+          </div>
         </div>
 
         <div class="card">
-          <h3>Pacientes por sucursal<span class="pill">Q10</span></h3>
-          <p class="desc">Pacientes atendidos en una sucursal (vía consultas o vacunaciones de los vets de esa sucursal). Un paciente atendido en varias sucursales aparece en cada una.</p>
-          <div class="field">
-            <label for="sucursal">Sucursal</label>
-            <select id="sucursal">
-              <option>Palermo</option>
-              <option>Belgrano</option>
-              <option>Caballito</option>
-              <option>Recoleta</option>
-              <option>Núñez</option>
-            </select>
-          </div>
-          <button class="action ghost" onclick="q10()">Buscar</button>
-        </div>
-
-        <div class="card">
-          <h3>Registrar consulta<span class="pill">Q14</span></h3>
-          <p class="desc">Alta de consulta o cirugía. Valida que paciente y veterinario existan y estén activos. Opcionalmente descuenta stock.</p>
+          <span class="card-number">14</span>
+          <h3>Registrar consulta</h3>
           <div class="row">
             <div class="field">
               <label for="cPac">ID paciente</label>
-              <input id="cPac" placeholder="P002" value="P002" />
+              <input id="cPac" value="P002" />
             </div>
             <div class="field">
               <label for="cVet">ID veterinario</label>
-              <input id="cVet" placeholder="V003" value="V003" />
+              <input id="cVet" value="V003" />
             </div>
           </div>
           <div class="row">
@@ -404,16 +467,16 @@
             </div>
           </div>
           <div class="field">
-            <label for="cMotivo">Motivo de la consulta</label>
-            <input id="cMotivo" placeholder="Control anual, fractura, etc." value="Control anual" />
+            <label for="cMotivo">Motivo</label>
+            <input id="cMotivo" value="Control anual" />
           </div>
           <div class="field">
             <label for="cDiag">Diagnóstico</label>
-            <input id="cDiag" placeholder="Sano, dermatitis, etc." value="Sano" />
+            <input id="cDiag" value="Sano" />
           </div>
           <div class="field">
             <label for="cCosto">Costo ($)</label>
-            <input id="cCosto" placeholder="3000" value="3000" type="number" min="0" />
+            <input id="cCosto" type="number" min="0" value="3000" />
           </div>
           <div class="field">
             <label>Productos usados (opcional)</label>
@@ -424,113 +487,88 @@
         </div>
 
       </div>
-    </section>
 
-    <!-- ============= REPORTES ============= -->
-    <section class="panel" id="panel-reportes">
+      <!-- ==== Reportes ==== -->
+      <div class="section-title">Reportes</div>
       <div class="grid">
 
         <div class="card">
-          <h3>Consultas en seguimiento<span class="pill">Q2</span></h3>
-          <p class="desc">Atenciones abiertas con veterinario asignado y costo.</p>
-          <button class="action" onclick="q2()">Ver seguimientos</button>
+          <span class="card-number">5</span>
+          <h3>Veterinarios activos (60d)</h3>
+          <button class="action" onclick="q5()">Ver ranking</button>
         </div>
 
         <div class="card">
-          <h3>Historial de paciente<span class="pill">Q3</span></h3>
-          <p class="desc">Unifica consultas y vacunaciones de un paciente, ordenadas por fecha descendente.</p>
-          <div class="field">
-            <label for="histPac">ID del paciente</label>
-            <input id="histPac" placeholder="P001" value="P001" />
-          </div>
-          <button class="action ghost" onclick="q3()">Ver historial</button>
-        </div>
-
-        <div class="card">
-          <h3>Propietarios con múltiples pacientes<span class="pill">Q4</span></h3>
-          <p class="desc">Dueños con más de una mascota registrada.</p>
-          <button class="action" onclick="q4()">Listar propietarios</button>
-        </div>
-
-        <div class="card">
-          <h3>Veterinarios activos 60d<span class="pill">Q5</span></h3>
-          <p class="desc">Veterinarios activos con el conteo de consultas de los últimos 60 días.</p>
-          <button class="action ghost" onclick="q5()">Ver ranking</button>
-        </div>
-
-        <div class="card">
-          <h3>Vacunas vencidas<span class="pill">Q6</span></h3>
-          <p class="desc">Pacientes cuya próxima dosis ya venció, agrupados por animal.</p>
-          <button class="action danger" onclick="q6()">Ver vencidas</button>
-        </div>
-
-        <div class="card">
-          <h3>Top 5 diagnósticos<span class="pill">Q7</span></h3>
-          <p class="desc">Diagnósticos más frecuentes en toda la base.</p>
+          <span class="card-number">7</span>
+          <h3>Top 5 diagnósticos</h3>
           <button class="action" onclick="q7()">Ver ranking</button>
         </div>
 
         <div class="card">
-          <h3>Ingresos por veterinario<span class="pill">Q11</span></h3>
-          <p class="desc">Total facturado por cada veterinario en el mes actual.</p>
-          <button class="action" onclick="q11()">Ver ingresos del mes</button>
+          <span class="card-number">11</span>
+          <h3>Ingresos por veterinario (mes actual)</h3>
+          <button class="action" onclick="q11()">Ver ingresos</button>
         </div>
 
       </div>
-    </section>
 
-    <!-- ============= STOCK ============= -->
-    <section class="panel" id="panel-stock">
+      <!-- ==== Stock ==== -->
+      <div class="section-title">Stock</div>
       <div class="grid">
 
         <div class="card">
-          <h3>Stock bajo<span class="pill">Q8</span></h3>
-          <p class="desc">Productos con menos unidades que el umbral indicado. El umbral debe ser positivo.</p>
+          <span class="card-number">8</span>
+          <h3>Stock bajo</h3>
           <div class="field">
-            <label for="umbral">Umbral de unidades</label>
-            <input id="umbral" placeholder="50" value="50" type="number" min="1" />
+            <label for="umbral">Umbral</label>
+            <input id="umbral" type="number" min="1" value="50" />
           </div>
-          <button class="action" onclick="q8()">Ver stock bajo</button>
+          <button class="action" onclick="q8()">Listar</button>
         </div>
 
         <div class="card">
-          <h3>Decrementar stock<span class="pill">Q15</span></h3>
-          <p class="desc">Descontar unidades de un producto. Falla si el stock disponible es menor.</p>
+          <span class="card-number">15</span>
+          <h3>Decrementar stock</h3>
           <div class="row">
             <div class="field">
-              <label for="prodId">ID del producto</label>
-              <input id="prodId" placeholder="PRD001" value="PRD001" />
+              <label for="prodId">ID producto</label>
+              <input id="prodId" value="PRD001" />
             </div>
             <div class="field" style="flex:0 0 90px">
               <label for="prodCant">Cantidad</label>
-              <input id="prodCant" placeholder="3" value="3" type="number" min="1" />
+              <input id="prodCant" type="number" min="1" value="3" />
             </div>
           </div>
-          <button class="action" onclick="q15()">Aplicar decremento</button>
+          <button class="action" onclick="q15()">Aplicar</button>
         </div>
 
       </div>
     </section>
 
-    <!-- ============= RAW QUERIES ============= -->
-    <section class="panel" id="panel-raw">
+    <!-- ================================================================ -->
+    <!--                             QUERIES                               -->
+    <!-- ================================================================ -->
+    <section class="panel" id="panel-queries">
       <div class="grid">
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q1 Pacientes activos</h3>
-          <p class="raw-endpoint">/api/pacientes-activos</p>
+          <span class="card-number">1</span>
+          <h3>Pacientes activos</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/pacientes-activos</p>
           <button class="action" onclick="q1()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q2 Consultas en seguimiento</h3>
-          <p class="raw-endpoint">/api/consultas-seguimiento</p>
+          <span class="card-number">2</span>
+          <h3>Consultas en seguimiento</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/consultas-seguimiento</p>
           <button class="action" onclick="q2()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q3 Historial de paciente</h3>
-          <p class="raw-endpoint">/api/historial-paciente/:id</p>
+          <span class="card-number">3</span>
+          <h3>Historial de paciente</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/historial-paciente/:id</p>
           <div class="field">
             <label for="rq3_id">ID del paciente</label>
             <input id="rq3_id" value="P001" />
@@ -539,32 +577,37 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q4 Propietarios con múltiples pacientes</h3>
-          <p class="raw-endpoint">/api/propietarios-multiples-pacientes</p>
+          <span class="card-number">4</span>
+          <h3>Propietarios con múltiples pacientes</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/propietarios-multiples-pacientes</p>
           <button class="action" onclick="q4()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q5 Vets activos con consultas 60d</h3>
-          <p class="raw-endpoint">/api/vets-activos-consultas-60d</p>
+          <span class="card-number">5</span>
+          <h3>Vets activos con consultas 60d</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/vets-activos-consultas-60d</p>
           <button class="action" onclick="q5()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q6 Vacunas vencidas</h3>
-          <p class="raw-endpoint">/api/pacientes-vacunas-vencidas</p>
+          <span class="card-number">6</span>
+          <h3>Vacunas vencidas</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/pacientes-vacunas-vencidas</p>
           <button class="action" onclick="q6()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q7 Top 5 diagnósticos</h3>
-          <p class="raw-endpoint">/api/top-diagnosticos</p>
+          <span class="card-number">7</span>
+          <h3>Top 5 diagnósticos</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/top-diagnosticos</p>
           <button class="action" onclick="q7()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q8 Stock bajo</h3>
-          <p class="raw-endpoint">/api/stock-bajo?umbral=N</p>
+          <span class="card-number">8</span>
+          <h3>Stock bajo</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/stock-bajo?umbral=N</p>
           <div class="field">
             <label for="rq8_umbral">Umbral</label>
             <input id="rq8_umbral" type="number" min="1" value="50" />
@@ -573,8 +616,9 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q9 Controles baratos</h3>
-          <p class="raw-endpoint">/api/controles-baratos?max=N</p>
+          <span class="card-number">9</span>
+          <h3>Controles baratos</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/controles-baratos?max=N</p>
           <div class="field">
             <label for="rq9_max">Costo máximo ($)</label>
             <input id="rq9_max" type="number" min="1" value="5000" />
@@ -583,8 +627,9 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q10 Pacientes por sucursal</h3>
-          <p class="raw-endpoint">/api/pacientes-sucursal?sucursal=X</p>
+          <span class="card-number">10</span>
+          <h3>Pacientes por sucursal</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/pacientes-sucursal?sucursal=X</p>
           <div class="field">
             <label for="rq10_sucursal">Sucursal</label>
             <input id="rq10_sucursal" value="Palermo" />
@@ -593,20 +638,23 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q11 Ingresos por vet (mes actual)</h3>
-          <p class="raw-endpoint">/api/ingresos-vet-mes</p>
+          <span class="card-number">11</span>
+          <h3>Ingresos por vet (mes actual)</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/ingresos-vet-mes</p>
           <button class="action" onclick="q11()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill get">GET</span>Q12 Propietarios inactivos</h3>
-          <p class="raw-endpoint">/api/propietarios-inactivos</p>
+          <span class="card-number">12</span>
+          <h3>Propietarios a revisar</h3>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/propietarios-inactivos</p>
           <button class="action" onclick="q12()">Ejecutar</button>
         </div>
 
         <div class="card">
-          <h3><span class="method-pill post">POST</span>Q13a Alta propietario</h3>
-          <p class="raw-endpoint">/api/propietarios</p>
+          <span class="card-number">13A</span>
+          <h3>Alta propietario</h3>
+          <p class="raw-endpoint"><span class="method-pill post">POST</span>/api/propietarios</p>
           <div class="field">
             <label for="rq13a_body">Body (JSON)</label>
             <textarea id="rq13a_body" class="json-input" rows="9">{
@@ -624,8 +672,9 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill put">PUT</span>Q13b Modificar propietario</h3>
-          <p class="raw-endpoint">/api/propietarios/:id</p>
+          <span class="card-number">13B</span>
+          <h3>Modificar propietario</h3>
+          <p class="raw-endpoint"><span class="method-pill put">PUT</span>/api/propietarios/:id</p>
           <div class="field">
             <label for="rq13b_id">ID</label>
             <input id="rq13b_id" value="C100" />
@@ -638,8 +687,9 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill delete">DELETE</span>Q13c Baja lógica propietario</h3>
-          <p class="raw-endpoint">/api/propietarios/:id</p>
+          <span class="card-number">13C</span>
+          <h3>Baja lógica propietario</h3>
+          <p class="raw-endpoint"><span class="method-pill delete">DELETE</span>/api/propietarios/:id</p>
           <div class="field">
             <label for="rq13c_id">ID</label>
             <input id="rq13c_id" value="C100" />
@@ -648,8 +698,9 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill post">POST</span>Q14 Alta consulta</h3>
-          <p class="raw-endpoint">/api/consultas</p>
+          <span class="card-number">14</span>
+          <h3>Alta consulta</h3>
+          <p class="raw-endpoint"><span class="method-pill post">POST</span>/api/consultas</p>
           <div class="field">
             <label for="rq14_body">Body (JSON)</label>
             <textarea id="rq14_body" class="json-input" rows="12">{
@@ -669,8 +720,9 @@
         </div>
 
         <div class="card">
-          <h3><span class="method-pill post">POST</span>Q15 Decrementar stock</h3>
-          <p class="raw-endpoint">/api/decrementar-stock</p>
+          <span class="card-number">15</span>
+          <h3>Decrementar stock</h3>
+          <p class="raw-endpoint"><span class="method-pill post">POST</span>/api/decrementar-stock</p>
           <div class="row">
             <div class="field">
               <label for="rq15_id">ID producto</label>
@@ -687,7 +739,9 @@
       </div>
     </section>
 
-    <!-- ============= RESULTS ============= -->
+    <!-- ================================================================ -->
+    <!--                            RESULTS                                -->
+    <!-- ================================================================ -->
     <div id="results">
       <div class="head">
         <div>
@@ -700,67 +754,69 @@
         <div class="empty">Sin datos cargados.</div>
       </div>
     </div>
+
   </main>
 
   <script>
-    // ---------------- Result helpers (defined first because tab switch resets them) ----------------
+    // ===================== Result helpers =====================
     const resTitle = document.getElementById('resTitle');
     const resMeta = document.getElementById('resMeta');
     const resBody = document.getElementById('resBody');
     const toggleBtn = document.getElementById('toggleJson');
-    let lastRawJson = null;
-    let rawMode = false;
 
     function resetResults() {
       resTitle.textContent = 'Resultados';
       resMeta.textContent = 'Elegí una acción del panel.';
       resBody.innerHTML = '<div class="empty">Sin datos cargados.</div>';
       toggleBtn.style.display = 'none';
-      lastRawJson = null;
     }
 
-    // ---------------- Tab switching ----------------
+    // ===================== Tab switching =====================
     document.querySelectorAll('nav.tabs button').forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
-        rawMode = btn.dataset.tab === 'raw';
         resetResults();
       };
     });
 
+    // ===================== Sub-tabs (delegation) =====================
+    document.addEventListener('click', (e) => {
+      if (!e.target.matches('.subtab-btn')) return;
+      const card = e.target.closest('.card');
+      card.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+      card.querySelectorAll('.subpanel').forEach(p => p.classList.remove('active'));
+      e.target.classList.add('active');
+      card.querySelector(`[data-subpanel="${e.target.dataset.subtab}"]`).classList.add('active');
+    });
+
+    // ===================== JSON toggle =====================
     function toggleJson() {
       const pre = document.querySelector('#resBody pre.json');
-      const renderedBlocks = document.querySelectorAll('#resBody .rendered');
+      const rendered = document.querySelectorAll('#resBody .rendered');
       if (!pre) return;
       pre.classList.toggle('hidden');
       const hidden = pre.classList.contains('hidden');
-      renderedBlocks.forEach(el => el.style.display = hidden ? '' : 'none');
+      rendered.forEach(el => el.style.display = hidden ? '' : 'none');
       toggleBtn.textContent = hidden ? 'Ver JSON' : 'Ver tabla';
     }
 
+    // ===================== Rendering =====================
     function escapeHtml(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
       }[c]));
     }
 
-    // Prettify a flattened column key:
-    //  - "_id"            -> "ID"
-    //  - "id_paciente"    -> "ID paciente"
-    //  - "paciente.nombre" -> {parent: "Paciente", sub: "Nombre"}  -> HTML with parent + small subkey
     function prettyKey(k) {
       const parts = k.split('.');
       const normalize = (s) => {
         if (s === '_id') return 'ID';
-        // id_xxx -> ID xxx
         const m = s.match(/^id_(.+)$/);
         if (m) return 'ID ' + m[1];
-        // snake_case / kebab-case -> spaces
         const spaced = s.replace(/[_-]+/g, ' ');
-        // capitalize first letter
         return spaced.charAt(0).toUpperCase() + spaced.slice(1);
       };
       const last = normalize(parts[parts.length - 1]);
@@ -776,7 +832,6 @@
         return `<span class="badge ${v ? 'activo' : 'inactivo'}">${v ? 'activo' : 'inactivo'}</span>`;
       }
       if (typeof v === 'number') return `<span class="num">${v.toLocaleString('es-AR')}</span>`;
-      // Array de objetos -> mini tabla embebida en la celda
       if (Array.isArray(v)) {
         if (v.length === 0) return '<span style="color:#aaa">—</span>';
         if (typeof v[0] === 'object' && v[0] !== null) {
@@ -801,12 +856,12 @@
 
     function flatten(obj, prefix = '') {
       const out = {};
-      for (const [k, v] of Object.entries(obj || {})) {
+      for (const [k, val] of Object.entries(obj || {})) {
         const key = prefix ? `${prefix}.${k}` : k;
-        if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && !v.$date) {
-          Object.assign(out, flatten(v, key));
+        if (val && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date) && !val.$date) {
+          Object.assign(out, flatten(val, key));
         } else {
-          out[key] = v;
+          out[key] = val;
         }
       }
       return out;
@@ -828,16 +883,14 @@
     function renderObject(obj) {
       if (obj && obj.ok) {
         const detalle = Object.entries(obj).filter(([k]) => k !== 'ok')
-          .map(([k, v]) => {
-            // Array de objetos -> tabla
-            if (Array.isArray(v) && v.length && typeof v[0] === 'object') {
-              return `<div style="margin-top:10px"><strong>${prettyKey(k)}</strong>${renderTable(v)}</div>`;
+          .map(([k, val]) => {
+            if (Array.isArray(val) && val.length && typeof val[0] === 'object') {
+              return `<div style="margin-top:10px"><strong>${prettyKey(k)}</strong>${renderTable(val)}</div>`;
             }
-            // Objeto -> tabla
-            if (v && typeof v === 'object' && !Array.isArray(v)) {
-              return `<div style="margin-top:10px"><strong>${prettyKey(k)}</strong>${renderTable([v])}</div>`;
+            if (val && typeof val === 'object' && !Array.isArray(val)) {
+              return `<div style="margin-top:10px"><strong>${prettyKey(k)}</strong>${renderTable([val])}</div>`;
             }
-            return `<div><strong>${prettyKey(k)}:</strong> ${fmtVal(v)}</div>`;
+            return `<div><strong>${prettyKey(k)}:</strong> ${fmtVal(val)}</div>`;
           }).join('');
         return `<div class="success-msg">Operación exitosa</div>${detalle}`;
       }
@@ -849,7 +902,6 @@
 
     function show(title, data, cacheEvents = []) {
       resTitle.textContent = title;
-      lastRawJson = data;
       let renderedHtml;
       const meta = [];
       if (Array.isArray(data)) {
@@ -858,7 +910,6 @@
       } else {
         renderedHtml = renderObject(data);
       }
-      // Badge de caché (si la query la usa)
       cacheEvents.forEach((e) => {
         const cls = e.status === 'HIT' ? 'cache-hit' : 'cache-miss';
         const label = e.status === 'HIT'
@@ -868,18 +919,10 @@
       });
       resMeta.innerHTML = meta.join(' · ');
       const jsonStr = JSON.stringify(data, null, 2);
-      // Show the rendered table by default in every tab; JSON stays available via toggle.
-      if (rawMode) {
-        resBody.innerHTML =
-          `<div class="rendered">${renderedHtml}</div>` +
-          `<pre class="json hidden">${escapeHtml(jsonStr)}</pre>`;
-        toggleBtn.textContent = 'Ver JSON';
-      } else {
-        resBody.innerHTML =
-          `<div class="rendered">${renderedHtml}</div>` +
-          `<pre class="json hidden">${escapeHtml(jsonStr)}</pre>`;
-        toggleBtn.textContent = 'Ver JSON';
-      }
+      resBody.innerHTML =
+        `<div class="rendered">${renderedHtml}</div>` +
+        `<pre class="json hidden">${escapeHtml(jsonStr)}</pre>`;
+      toggleBtn.textContent = 'Ver JSON';
       toggleBtn.style.display = 'inline-block';
     }
 
@@ -890,8 +933,7 @@
       toggleBtn.style.display = 'none';
     }
 
-    // Devuelve { data, cache } donde cache es el contenido del header X-Cache
-    // (null si la query no usa caché).
+    // ===================== Fetch helpers =====================
     async function api(method, url, body) {
       const opts = { method, headers: { 'Content-Type': 'application/json' } };
       if (body) opts.body = JSON.stringify(body);
@@ -900,7 +942,6 @@
       return { data: await res.json(), cache };
     }
 
-    // Parsea el header X-Cache en eventos 
     function parseCacheHeader(raw) {
       if (!raw) return [];
       return raw.split(',').map((s) => s.trim()).filter(Boolean).map((s) => {
@@ -915,6 +956,8 @@
       resMeta.textContent = 'Cargando…';
       resBody.innerHTML = '<div class="empty">Cargando…</div>';
       toggleBtn.style.display = 'none';
+      // Llevar al usuario al panel de resultados sin que tenga que scrollear
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
       try {
         const { data, cache } = await api(method, url, body);
         show(title, data, parseCacheHeader(cache));
@@ -925,7 +968,7 @@
 
     const v = id => document.getElementById(id).value.trim();
 
-    // ---------------- Query handlers ----------------
+    // ===================== Dashboard handlers =====================
     function q1()  { run('Pacientes activos + propietario', 'GET', '/api/pacientes-activos'); }
     function q2()  { run('Consultas en seguimiento', 'GET', '/api/consultas-seguimiento'); }
     function q3()  { run(`Historial del paciente ${v('histPac')}`, 'GET', `/api/historial-paciente/${encodeURIComponent(v('histPac'))}`); }
@@ -937,7 +980,7 @@
     function q9()  { run(`Controles con costo < $${v('maxCosto')}`, 'GET', `/api/controles-baratos?max=${v('maxCosto')}`); }
     function q10() { run(`Pacientes de la sucursal ${v('sucursal')}`, 'GET', `/api/pacientes-sucursal?sucursal=${encodeURIComponent(v('sucursal'))}`); }
     function q11() { run('Ingresos por veterinario - mes actual', 'GET', '/api/ingresos-vet-mes'); }
-    function q12() { run('Propietarios sin consultas en el último año', 'GET', '/api/propietarios-inactivos'); }
+    function q12() { run('Propietarios a revisar', 'GET', '/api/propietarios-inactivos'); }
 
     function q13Alta() {
       run(`Alta propietario ${v('newId')}`, 'POST', '/api/propietarios', {
@@ -948,6 +991,7 @@
         ciudad: v('newCiudad'), provincia: v('newProv'),
       });
     }
+
     function onModCampoChange() {
       const campo = document.getElementById('modCampo').value;
       const container = document.getElementById('modValorContainer');
@@ -976,11 +1020,12 @@
         [campo]: valor,
       });
     }
+
     function q13Baja() {
       run(`Baja lógica propietario ${v('bajaId')}`, 'DELETE', `/api/propietarios/${v('bajaId')}`);
     }
 
-    // Productos usados: lista dinámica con + y x
+    // Productos lista dinámica
     function addProductoRow(id = '', cantidad = '') {
       const container = document.getElementById('productosLista');
       const row = document.createElement('div');
@@ -988,8 +1033,7 @@
       row.innerHTML = `
         <input type="text" class="prod-id" placeholder="PRD001" value="${id}" />
         <input type="number" class="prod-cant" placeholder="1" min="1" value="${cantidad}" />
-        <button type="button" class="btn-icon" onclick="this.parentElement.remove()" title="Quitar">×</button>
-      `;
+        <button type="button" class="btn-icon" onclick="this.parentElement.remove()" title="Quitar">×</button>`;
       container.appendChild(row);
     }
 
@@ -1001,7 +1045,6 @@
       })).filter(p => p.id_producto && p.cantidad > 0);
     }
 
-    // Una fila inicial vacía para que sea obvio que se pueden agregar productos
     window.addEventListener('DOMContentLoaded', () => addProductoRow());
 
     function q14() {
@@ -1016,6 +1059,7 @@
       if (productos.length) body.productos_usados = productos;
       run('Alta de consulta', 'POST', '/api/consultas', body);
     }
+
     function q15() {
       run(`Decremento de ${v('prodId')} (-${v('prodCant')})`, 'POST', '/api/decrementar-stock', {
         id_producto: v('prodId'),
@@ -1023,29 +1067,17 @@
       });
     }
 
-    // ---------------- Raw tab handlers ----------------
-    // Toman valores de inputs prefijados con 'rq' para no chocar con los del dashboard.
+    // ===================== Raw queries handlers =====================
     function parseJsonField(id) {
       try { return JSON.parse(document.getElementById(id).value); }
       catch (e) { throw new Error(`Body JSON inválido: ${e.message}`); }
     }
 
-    function rawQ3() {
-      const id = v('rq3_id');
-      run(`Q3 Historial ${id}`, 'GET', `/api/historial-paciente/${encodeURIComponent(id)}`);
-    }
-    function rawQ8() {
-      const u = v('rq8_umbral');
-      run(`Q8 Stock bajo (< ${u})`, 'GET', `/api/stock-bajo?umbral=${u}`);
-    }
-    function rawQ9() {
-      const m = v('rq9_max');
-      run(`Q9 Controles (< $${m})`, 'GET', `/api/controles-baratos?max=${m}`);
-    }
-    function rawQ10() {
-      const s = v('rq10_sucursal');
-      run(`Q10 Pacientes sucursal ${s}`, 'GET', `/api/pacientes-sucursal?sucursal=${encodeURIComponent(s)}`);
-    }
+    function rawQ3()  { const id = v('rq3_id'); run(`Q3 Historial ${id}`, 'GET', `/api/historial-paciente/${encodeURIComponent(id)}`); }
+    function rawQ8()  { const u = v('rq8_umbral'); run(`Q8 Stock bajo (< ${u})`, 'GET', `/api/stock-bajo?umbral=${u}`); }
+    function rawQ9()  { const m = v('rq9_max'); run(`Q9 Controles (< $${m})`, 'GET', `/api/controles-baratos?max=${m}`); }
+    function rawQ10() { const s = v('rq10_sucursal'); run(`Q10 Pacientes sucursal ${s}`, 'GET', `/api/pacientes-sucursal?sucursal=${encodeURIComponent(s)}`); }
+
     function rawQ13Alta() {
       try {
         const body = parseJsonField('rq13a_body');
@@ -1073,8 +1105,7 @@
       const id = v('rq15_id');
       const cant = v('rq15_cant');
       run(`Q15 Decremento ${id} (-${cant})`, 'POST', '/api/decrementar-stock', {
-        id_producto: id,
-        cantidad: Number(cant),
+        id_producto: id, cantidad: Number(cant),
       });
     }
   </script>
