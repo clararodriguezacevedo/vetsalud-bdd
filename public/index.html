@@ -267,12 +267,7 @@
 
   <main>
 
-    <!-- ================================================================ -->
-    <!--                            DASHBOARD                              -->
-    <!-- ================================================================ -->
     <section class="panel active" id="panel-dashboard">
-
-      <!-- ==== Pacientes y propietarios ==== -->
       <div class="section-title">Pacientes y propietarios</div>
       <div class="bento-2col">
 
@@ -393,7 +388,6 @@
 
       </div>
 
-      <!-- ==== Atenciones ==== -->
       <div class="section-title">Atenciones</div>
       <div class="bento-2col">
 
@@ -488,7 +482,6 @@
 
       </div>
 
-      <!-- ==== Reportes ==== -->
       <div class="section-title">Reportes</div>
       <div class="grid">
 
@@ -512,7 +505,6 @@
 
       </div>
 
-      <!-- ==== Stock ==== -->
       <div class="section-title">Stock</div>
       <div class="grid">
 
@@ -545,9 +537,6 @@
       </div>
     </section>
 
-    <!-- ================================================================ -->
-    <!--                             QUERIES                               -->
-    <!-- ================================================================ -->
     <section class="panel" id="panel-queries">
       <div class="grid">
 
@@ -739,9 +728,6 @@
       </div>
     </section>
 
-    <!-- ================================================================ -->
-    <!--                            RESULTS                                -->
-    <!-- ================================================================ -->
     <div id="results">
       <div class="head">
         <div>
@@ -758,7 +744,6 @@
   </main>
 
   <script>
-    // ===================== Result helpers =====================
     const resTitle = document.getElementById('resTitle');
     const resMeta = document.getElementById('resMeta');
     const resBody = document.getElementById('resBody');
@@ -771,7 +756,6 @@
       toggleBtn.style.display = 'none';
     }
 
-    // ===================== Tab switching =====================
     document.querySelectorAll('nav.tabs button').forEach(btn => {
       btn.onclick = () => {
         document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
@@ -782,7 +766,6 @@
       };
     });
 
-    // ===================== Sub-tabs (delegation) =====================
     document.addEventListener('click', (e) => {
       if (!e.target.matches('.subtab-btn')) return;
       const card = e.target.closest('.card');
@@ -792,7 +775,6 @@
       card.querySelector(`[data-subpanel="${e.target.dataset.subtab}"]`).classList.add('active');
     });
 
-    // ===================== JSON toggle =====================
     function toggleJson() {
       const pre = document.querySelector('#resBody pre.json');
       const rendered = document.querySelectorAll('#resBody .rendered');
@@ -803,7 +785,6 @@
       toggleBtn.textContent = hidden ? 'Ver JSON' : 'Ver tabla';
     }
 
-    // ===================== Rendering =====================
     function escapeHtml(s) {
       return String(s ?? '').replace(/[&<>"']/g, c => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -933,7 +914,6 @@
       toggleBtn.style.display = 'none';
     }
 
-    // ===================== Fetch helpers =====================
     async function api(method, url, body) {
       const opts = { method, headers: { 'Content-Type': 'application/json' } };
       if (body) opts.body = JSON.stringify(body);
@@ -956,7 +936,6 @@
       resMeta.textContent = 'Cargando…';
       resBody.innerHTML = '<div class="empty">Cargando…</div>';
       toggleBtn.style.display = 'none';
-      // Llevar al usuario al panel de resultados sin que tenga que scrollear
       document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
       try {
         const { data, cache } = await api(method, url, body);
@@ -968,7 +947,6 @@
 
     const v = id => document.getElementById(id).value.trim();
 
-    // ===================== Dashboard handlers =====================
     function q1()  { run('Pacientes activos + propietario', 'GET', '/api/pacientes-activos'); }
     function q2()  { run('Consultas en seguimiento', 'GET', '/api/consultas-seguimiento'); }
     function q3()  { run(`Historial del paciente ${v('histPac')}`, 'GET', `/api/historial-paciente/${encodeURIComponent(v('histPac'))}`); }
@@ -1025,7 +1003,6 @@
       run(`Baja lógica propietario ${v('bajaId')}`, 'DELETE', `/api/propietarios/${v('bajaId')}`);
     }
 
-    // Productos lista dinámica
     function addProductoRow(id = '', cantidad = '') {
       const container = document.getElementById('productosLista');
       const row = document.createElement('div');
@@ -1067,7 +1044,6 @@
       });
     }
 
-    // ===================== Raw queries handlers =====================
     function parseJsonField(id) {
       try { return JSON.parse(document.getElementById(id).value); }
       catch (e) { throw new Error(`Body JSON inválido: ${e.message}`); }

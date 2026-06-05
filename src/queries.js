@@ -1,28 +1,8 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { connect } from './db.js';
 
-// Las atenciones médicas estan en una sola colección 'consultas'
-// con un campo 'tipo':
-//   - 'Consulta', atención clínica general/controles
-//   - 'Cirugia'
-// Las vacunaciones quedan en su propia colección porque su estructura
-// difiere (sin costo, con proxima_dosis).
-
-// Contexto async para registrar eventos de caché por request.
-// El wrapper de express en server.js abre un store al recibir el request;
-// cached() empuja eventos {status: 'HIT'|'MISS', key, ttl}; el wrapper los
-// lee al final y los manda en el header 'X-Cache'.
 export const cacheCtx = new AsyncLocalStorage();
 
-// ---------------------------------------------------------------------
-// Caché (cache-aside con TTL sobre Redis)
-//   - cached(key, ttl, fn): intenta leer la key; si no está, ejecuta fn,
-//     guarda el resultado serializado en Redis y lo devuelve.
-//   - invalidate(...keys): borra una o más keys de caché. Se llama desde
-//     las operaciones de escritura cuando los datos cacheados quedan
-//     obsoletos.
-// Las keys de caché empiezan con 'cache:' para no chocar con 'stock:*'.
-// ---------------------------------------------------------------------
 async function cached(key, ttlSeconds, fn) {
   const { redis } = await connect();
   const hit = await redis.get(key);
@@ -44,7 +24,6 @@ async function invalidate(...keys) {
   await redis.del(keys);
 }
 
-// Útil para inspección y para un endpoint admin de "limpiar caché".
 export async function flushCache() {
   const { redis } = await connect();
   const keys = await redis.keys('cache:*');
@@ -52,8 +31,7 @@ export async function flushCache() {
   return { ok: true, eliminadas: keys.length };
 }
 
-// 1 - Pacientes activos con todos sus datos de propietario (Mongo)
-// Incluye el estado (activo / baja lógica) del propietario.
+// 1 - Pacientes activos con propietario
 export async function pacientesActivosConPropietario() {
   const { db } = await connect();
   return db
@@ -86,7 +64,7 @@ export async function pacientesActivosConPropietario() {
     .toArray();
 }
 
-// 2 - Consultas en seguimiento con veterinario asignado y costo (Mongo)
+// 2 - Consultas en seguimiento
 export async function consultasEnSeguimiento() {
   const { db } = await connect();
   return db
@@ -142,8 +120,7 @@ export async function consultasEnSeguimiento() {
     .toArray();
 }
 
-// 3 - Historial completo de un paciente: consultas + vacunaciones (Mongo)
-// Se devuelve ordenado por fecha descendente para ver lo más reciente primero.
+// 3 - Historial de paciente (consultas + vacunaciones unificados)
 export async function historialPaciente(idPaciente) {
   const { db } = await connect();
   const paciente = await db.collection('pacientes').findOne({ _id: idPaciente });
@@ -224,8 +201,7 @@ export async function historialPaciente(idPaciente) {
     .sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || String(a.id_evento).localeCompare(String(b.id_evento)));
 }
 
-// 4 - Propietarios con más de un paciente registrado (Mongo)
-// Incluye la lista de pacientes de cada propietario en el resultado.
+// 4 - Propietarios con más de un paciente
 export async function propietariosConMultiplesPacientes() {
   const { db } = await connect();
   return db
@@ -279,56 +255,55 @@ export async function propietariosConMultiplesPacientes() {
     .toArray();
 }
 
-// 5 - Veterinarios activos y cantidad de consultas en los últimos 60 días (Mongo, cacheado)
+// 5 - Veterinarios activos con consultas en últimos 60 días (cacheado)
 export async function veterinariosActivosConConsultas60d() {
   return cached('cache:vets-consultas-60d', 300, async () => {
-  const { db } = await connect();
-  const desde = new Date();
-  desde.setDate(desde.getDate() - 60);
-  return db
-    .collection('veterinarios')
-    .aggregate([
-      { $match: { activo: true } },
-      {
-        $lookup: {
-          from: 'consultas',
-          let: { vetId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$id_vet', '$$vetId'] },
-                    { $gte: ['$fecha', desde] },
-                  ],
+    const { db } = await connect();
+    const desde = new Date();
+    desde.setDate(desde.getDate() - 60);
+    return db
+      .collection('veterinarios')
+      .aggregate([
+        { $match: { activo: true } },
+        {
+          $lookup: {
+            from: 'consultas',
+            let: { vetId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$id_vet', '$$vetId'] },
+                      { $gte: ['$fecha', desde] },
+                    ],
+                  },
                 },
               },
-            },
-          ],
-          as: 'consultas_60d',
+            ],
+            as: 'consultas_60d',
+          },
         },
-      },
-      {
-        $project: {
-          _id: 0,
-          id_vet: '$_id',
-          nombre: 1,
-          apellido: 1,
-          matricula: 1,
-          especialidad: 1,
-          sucursal: 1,
-          activo: 1,
-          cantidad_consultas_60d: { $size: '$consultas_60d' },
+        {
+          $project: {
+            _id: 0,
+            id_vet: '$_id',
+            nombre: 1,
+            apellido: 1,
+            matricula: 1,
+            especialidad: 1,
+            sucursal: 1,
+            activo: 1,
+            cantidad_consultas_60d: { $size: '$consultas_60d' },
+          },
         },
-      },
-      { $sort: { cantidad_consultas_60d: -1, apellido: 1, nombre: 1 } },
-    ])
-    .toArray();
+        { $sort: { cantidad_consultas_60d: -1, apellido: 1, nombre: 1 } },
+      ])
+      .toArray();
   });
 }
 
-// 6 - Pacientes con vacunas vencidas (Mongo)
-// Devuelve un registro por paciente con la lista de sus vacunas vencidas.
+// 6 - Pacientes con vacunas vencidas
 export async function pacientesConVacunasVencidas() {
   const { db } = await connect();
   const hoy = new Date();
@@ -381,7 +356,7 @@ export async function pacientesConVacunasVencidas() {
     .toArray();
 }
 
-// 7 - Top 5 diagnósticos más frecuentes (Mongo, cacheado)
+// 7 - Top 5 diagnósticos (cacheado)
 export async function topDiagnosticos() {
   return cached('cache:top-diagnosticos', 300, async () => {
     const { db } = await connect();
@@ -396,27 +371,21 @@ export async function topDiagnosticos() {
   });
 }
 
-// 8 - Stock bajo (Redis + Mongo) - patrón políglota explícito
-// Redis: índice ordenado por unidades -> trae los IDs con stock < umbral.
-// Mongo: master data de los productos (nombre, proveedor, vencimiento, etc).
-// Combinamos ambas fuentes para devolver el resultado completo.
+// 8 - Stock bajo (Redis sorted set + Mongo master data)
 export async function stockBajo(umbral = 50) {
   const { db, redis } = await connect();
-  // 1. Redis: IDs ordenados por unidades ascendente, con sus scores
   const entries = await redis.zRangeByScoreWithScores('stock:unidades', '-inf', umbral - 1);
   if (entries.length === 0) return [];
-  // 2. Mongo: metadata para esos IDs (una sola query, $in)
   const ids = entries.map((e) => e.value);
   const meta = await db.collection('productos').find({ _id: { $in: ids } }).toArray();
   const metaMap = new Map(meta.map((p) => [p._id, p]));
-  // 3. Combinar manteniendo el orden por unidades
   return entries.map((e) => ({
     ...(metaMap.get(e.value) || { _id: e.value }),
     unidades: Number(e.score),
   }));
 }
 
-// 9 - Consultas tipo 'Control' con costo menor a $5.000 (Mongo)
+// 9 - Consultas tipo Control con costo bajo umbral
 export async function controlesBaratos(maxCosto = 5000) {
   const { db } = await connect();
   return db
@@ -448,17 +417,13 @@ export async function controlesBaratos(maxCosto = 5000) {
     .toArray();
 }
 
-// 10 - Pacientes de una sucursal, a través del veterinario (Mongo)
-// Considera tanto consultas como vacunaciones: un paciente está
-// asociado a una sucursal si algún vet de esa sucursal lo atendió
-// (clínicamente o aplicándole una vacuna).
+// 10 - Pacientes de una sucursal (vía consultas + vacunaciones)
 export async function pacientesPorSucursal(sucursal) {
   const { db } = await connect();
   return db
     .collection('veterinarios')
     .aggregate([
       { $match: { sucursal } },
-      // Consultas de cada vet
       {
         $lookup: {
           from: 'consultas',
@@ -467,7 +432,6 @@ export async function pacientesPorSucursal(sucursal) {
           as: 'consultas',
         },
       },
-      // Vacunaciones aplicadas por cada vet
       {
         $lookup: {
           from: 'vacunaciones',
@@ -476,7 +440,6 @@ export async function pacientesPorSucursal(sucursal) {
           as: 'vacunaciones',
         },
       },
-      // Unimos sin duplicar
       {
         $project: {
           ids: { $setUnion: ['$consultas.id_paciente', '$vacunaciones.id_paciente'] },
@@ -499,49 +462,41 @@ export async function pacientesPorSucursal(sucursal) {
     .toArray();
 }
 
-// 11 - Ingresos totales por veterinario en el mes actual (Mongo, cacheado)
+// 11 - Ingresos por veterinario (mes actual, cacheado)
 export async function ingresosPorVetMesActual() {
   return cached('cache:ingresos-vet-mes', 60, async () => {
-  const { db } = await connect();
-  const ahora = new Date();
-  const desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-  const hasta = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
-  return db
-    .collection('consultas')
-    .aggregate([
-      { $match: { fecha: { $gte: desde, $lt: hasta } } },
-      { $group: { _id: '$id_vet', ingresos: { $sum: '$costo' }, cantidad: { $sum: 1 } } },
-      {
-        $lookup: {
-          from: 'veterinarios',
-          localField: '_id',
-          foreignField: '_id',
-          as: 'vet',
+    const { db } = await connect();
+    const ahora = new Date();
+    const desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    const hasta = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
+    return db
+      .collection('consultas')
+      .aggregate([
+        { $match: { fecha: { $gte: desde, $lt: hasta } } },
+        { $group: { _id: '$id_vet', ingresos: { $sum: '$costo' }, cantidad: { $sum: 1 } } },
+        {
+          $lookup: {
+            from: 'veterinarios',
+            localField: '_id',
+            foreignField: '_id',
+            as: 'vet',
+          },
         },
-      },
-      { $unwind: '$vet' },
-      {
-        $project: {
-          _id: 0, id_vet: '$_id',
-          veterinario: { $concat: ['$vet.nombre', ' ', '$vet.apellido'] },
-          sucursal: '$vet.sucursal', ingresos: 1, cantidad: 1,
+        { $unwind: '$vet' },
+        {
+          $project: {
+            _id: 0, id_vet: '$_id',
+            veterinario: { $concat: ['$vet.nombre', ' ', '$vet.apellido'] },
+            sucursal: '$vet.sucursal', ingresos: 1, cantidad: 1,
+          },
         },
-      },
-      { $sort: { ingresos: -1 } },
-    ])
-    .toArray();
+        { $sort: { ingresos: -1 } },
+      ])
+      .toArray();
   });
 }
 
-// 12 - Propietarios "que necesitan atención" (Mongo)
-// Devuelve los propietarios que caen en alguna de estas categorías,
-// diferenciadas por el campo 'categoria':
-//   - 'Dado de baja'                 : activo = false
-//   - 'Sin mascotas'                 : activo = true, no tiene pacientes
-//   - 'Sin consultas en el último año': activo = true, tiene pacientes pero
-//                                       ninguno fue atendido en >12 meses
-// La precedencia es la del orden de arriba: un propietario inactivo aparece
-// como 'Dado de baja' aunque también podría haber estado en otra categoría.
+// 12 - Propietarios a revisar (3 categorías: baja / sin mascotas / sin consultas recientes)
 export async function propietariosSinConsultasUltimoAnio() {
   const { db } = await connect();
   const haceUnAnio = new Date();
@@ -582,7 +537,6 @@ export async function propietariosSinConsultasUltimoAnio() {
           cantidad_consultas_recientes: { $size: '$consultasRecientes' },
         },
       },
-      // Nos quedamos solo con los que caen en alguna categoría
       {
         $match: {
           $or: [
@@ -592,7 +546,6 @@ export async function propietariosSinConsultasUltimoAnio() {
           ],
         },
       },
-      // Clasificamos. El $switch evalúa en orden, asi que 'Dado de baja' gana.
       {
         $addFields: {
           categoria: {
@@ -604,7 +557,6 @@ export async function propietariosSinConsultasUltimoAnio() {
               default: 'Sin consultas en el último año',
             },
           },
-          // Orden interno para ordenar las categorías en el resultado
           _orden_categoria: {
             $switch: {
               branches: [
@@ -632,7 +584,7 @@ export async function propietariosSinConsultasUltimoAnio() {
     .toArray();
 }
 
-// 13 - ABM de propietarios, baja lógica (Mongo)  
+// 13 - ABM de propietarios (baja lógica)
 export async function altaPropietario(propietario) {
   const { db } = await connect();
   if (!propietario._id) throw new Error('Falta el _id del propietario');
@@ -657,17 +609,11 @@ export async function bajaPropietario(id) {
   return { ok: true, baja_logica: id };
 }
 
-// 14 - Alta de consulta Mongo + Redis
-// Valida que paciente y veterinario existan y estén activos.
-// Opcionalmente acepta 'productos_usados': [{id_producto, cantidad}, ...]
-// y descuenta el stock correspondiente en Redis (consulta 15).
-// La pre-validación de stock se hace antes de insertar para minimizar
-// la chance de quedar con una consulta huérfana si el stock no alcanza.
+// 14 - Alta de consulta (Mongo + Redis: valida activo, descuenta stock, invalida caché)
 export async function altaConsulta(consulta) {
   const { db, redis } = await connect();
   const { id_paciente, id_vet, productos_usados } = consulta;
 
-  // Validaciones contra Mongo
   const paciente = await db.collection('pacientes').findOne({ _id: id_paciente });
   if (!paciente) throw new Error(`El paciente ${id_paciente} no existe`);
   if (!paciente.activo) throw new Error(`El paciente ${id_paciente} está dado de baja`);
@@ -676,7 +622,6 @@ export async function altaConsulta(consulta) {
   if (!vet) throw new Error(`El veterinario ${id_vet} no existe`);
   if (!vet.activo) throw new Error(`El veterinario ${id_vet} no está activo`);
 
-  // Consolidar las filas repetidas
   const consolidado = new Map();
   for (const p of (Array.isArray(productos_usados) ? productos_usados : [])) {
     if (!p?.id_producto) continue;
@@ -686,11 +631,6 @@ export async function altaConsulta(consulta) {
   }
   const productos = [...consolidado].map(([id_producto, cantidad]) => ({ id_producto, cantidad }));
 
-  // Pre-validación del stock contra Redis (Sorted Set 'stock:unidades').
-  // ZSCORE devuelve null si el producto no está en el set (no existe).
-  // Esto es best-effort: el decremento real (vía Lua en Q15) hace su propia
-  // validación atómica, pero pre-validar nos permite fallar antes de insertar
-  // la consulta en Mongo.
   for (const p of productos) {
     const actual = await redis.zScore('stock:unidades', p.id_producto);
     if (actual === null) {
@@ -721,13 +661,8 @@ export async function altaConsulta(consulta) {
   };
   await db.collection('consultas').insertOne(doc);
 
-  // Invalidar cachés que dependen de la colección consultas:
-  //  - Q7 (top diagnósticos): cambia si suma un diagnóstico
-  //  - Q11 (ingresos mes actual): cambia si la nueva consulta es del mes en curso (siempre lo es)
-  //  - Q5 (vets con consultas en 60d): cambia siempre que se agregue una consulta reciente
   await invalidate('cache:top-diagnosticos', 'cache:ingresos-vet-mes', 'cache:vets-consultas-60d');
 
-  // Decremento de stock
   const stockResultado = [];
   for (const p of productos) {
     stockResultado.push(await decrementarStock(p.id_producto, Number(p.cantidad)));
@@ -740,15 +675,8 @@ export async function altaConsulta(consulta) {
   };
 }
 
-// 15 - Decrementar unidades de un producto (Redis, atómico via Lua)
-// Usamos un Lua script para que la verificación de existencia, la verificación
-// de stock suficiente y el ZINCRBY ocurran como una sola operación atómica.
-// Sin Lua tendríamos una ventana entre ZSCORE y ZINCRBY donde otro decremento
-// podría dejar el stock en negativo.
-// Retornos del script:
-//   -1  el producto no existe en el sorted set
-//   -2  stock insuficiente
-//   N>=0  unidades resultantes después del decremento
+// 15 - Decrementar stock (Redis, atómico vía Lua)
+// Returns: -1 producto no existe, -2 stock insuficiente, N>=0 unidades resultantes
 const STOCK_DECREMENT_LUA = `
 local score = redis.call('ZSCORE', KEYS[1], ARGV[1])
 if not score then return -1 end

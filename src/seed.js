@@ -17,7 +17,6 @@ const bool = (v) => String(v).toLowerCase() === 'true';
 async function main() {
   const { db, redis } = await connect();
 
-  // Mongo
   const propietarios = readCsv('propietarios.csv').map((r) => ({
     _id: r.id_propietario,
     nombre: r.nombre,
@@ -50,7 +49,6 @@ async function main() {
     activo: bool(r.activo),
   }));
 
-  // Tipos: 'Consulta' (sinónimo de control/controles) y 'Cirugia'
   const consultas = readCsv('consultas.csv').map((r) => ({
     _id: r.id_consulta,
     id_paciente: r.id_paciente,
@@ -63,9 +61,8 @@ async function main() {
     estado: r.estado,
   }));
 
-  // Inyectar consultas del mes en curso para que Q11 (ingresos del mes
-  // actual) siempre tenga datos. Las fechas se generan relativas a 'hoy'
-  // así no hace falta editar CSVs cada vez.
+  // Inyectar consultas del mes en curso para que Q11 (ingresos del mes) siempre
+  // tenga datos sin importar cuándo se corra el seed.
   const ahora = new Date();
   const año = ahora.getFullYear();
   const mes = ahora.getMonth();
@@ -74,15 +71,15 @@ async function main() {
     (max, c) => Math.max(max, Number(String(c._id).replace(/\D/g, ''))), 0,
   );
   const extras = [
-    { paciente: 'P001', vet: 'V001', costo: 4500, motivo: 'Control mensual', diagnostico: 'Sano', tipo: 'Consulta' },
-    { paciente: 'P002', vet: 'V003', costo: 5500, motivo: 'Alergia', diagnostico: 'Dermatitis atópica', tipo: 'Consulta' },
-    { paciente: 'P004', vet: 'V001', costo: 3200, motivo: 'Control', diagnostico: 'Sano', tipo: 'Consulta' },
-    { paciente: 'P005', vet: 'V002', costo: 18000, motivo: 'Esterilización', diagnostico: 'Cirugía exitosa', tipo: 'Cirugia' },
-    { paciente: 'P006', vet: 'V003', costo: 3800, motivo: 'Picazón', diagnostico: 'Otitis externa', tipo: 'Consulta' },
-    { paciente: 'P008', vet: 'V007', costo: 4200, motivo: 'Plumas decaídas', diagnostico: 'Carencia nutricional', tipo: 'Consulta' },
-    { paciente: 'P009', vet: 'V001', costo: 3200, motivo: 'Pulgas', diagnostico: 'Infestación parasitaria', tipo: 'Consulta' },
-    { paciente: 'P014', vet: 'V006', costo: 25000, motivo: 'Tumor cutáneo', diagnostico: 'Resección de masa', tipo: 'Cirugia' },
-    { paciente: 'P017', vet: 'V001', costo: 4100, motivo: 'Otitis', diagnostico: 'Otitis externa', tipo: 'Consulta' },
+    { paciente: 'P001', vet: 'V001', costo: 4500,  motivo: 'Control mensual',   diagnostico: 'Sano',                 tipo: 'Consulta' },
+    { paciente: 'P002', vet: 'V003', costo: 5500,  motivo: 'Alergia',           diagnostico: 'Dermatitis atópica',   tipo: 'Consulta' },
+    { paciente: 'P004', vet: 'V001', costo: 3200,  motivo: 'Control',           diagnostico: 'Sano',                 tipo: 'Consulta' },
+    { paciente: 'P005', vet: 'V002', costo: 18000, motivo: 'Esterilización',    diagnostico: 'Cirugía exitosa',      tipo: 'Cirugia' },
+    { paciente: 'P006', vet: 'V003', costo: 3800,  motivo: 'Picazón',           diagnostico: 'Otitis externa',       tipo: 'Consulta' },
+    { paciente: 'P008', vet: 'V007', costo: 4200,  motivo: 'Plumas decaídas',   diagnostico: 'Carencia nutricional', tipo: 'Consulta' },
+    { paciente: 'P009', vet: 'V001', costo: 3200,  motivo: 'Pulgas',            diagnostico: 'Infestación parasitaria', tipo: 'Consulta' },
+    { paciente: 'P014', vet: 'V006', costo: 25000, motivo: 'Tumor cutáneo',     diagnostico: 'Resección de masa',    tipo: 'Cirugia' },
+    { paciente: 'P017', vet: 'V001', costo: 4100,  motivo: 'Otitis',            diagnostico: 'Otitis externa',       tipo: 'Consulta' },
   ];
   extras.forEach((e, i) => {
     const dia = Math.max(1, Math.min(diaActual, 28) - i);
@@ -126,7 +123,6 @@ async function main() {
     console.log(`Mongo ${nombre}: ${docs.length} documentos`);
   }
 
-  // Índices por fecha y para referencias
   await db.collection('consultas').createIndex({ fecha: 1 });
   await db.collection('consultas').createIndex({ id_vet: 1 });
   await db.collection('pacientes').createIndex({ id_propietario: 1 });

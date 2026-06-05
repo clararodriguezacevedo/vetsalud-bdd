@@ -10,7 +10,6 @@ let mongoClient;
 let redisClient;
 let db;
 
-// Conecta a ambos motores una sola vez y reutiliza los clientes.
 export async function connect() {
   if (!mongoClient) {
     mongoClient = new MongoClient(MONGO_URI);
