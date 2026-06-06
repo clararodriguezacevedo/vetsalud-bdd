@@ -605,11 +605,134 @@ Esta query justifica dos decisiones de modelado. Por un lado, consultas y cirug�
 ]
 \end{codeblock}
 
+\subsubsection{Query 4: Propietarios con más de un paciente}
+
+La cuarta query expone el endpoint \code{GET /api/propietarios-multiples-pacientes} y lista los propietarios que tienen más de un paciente registrado. Se implementa sobre MongoDB usando las colecciones \code{pacientes} y \code{propietarios}.
+
+El pipeline comienza desde \code{pacientes}, porque el dato que se necesita contar es la cantidad de mascotas asociadas a cada propietario. Primero agrupa por \code{id\_propietario}, calcula \code{cantidad\_pacientes} con \code{\$sum} y guarda en un arreglo los datos básicos de cada paciente mediante \code{\$push}. Luego aplica un \code{\$match} para conservar únicamente los grupos con más de un paciente.
+
+Después de identificar los propietarios que cumplen la condición, la query usa \code{\$lookup} contra \code{propietarios} para incorporar sus datos de contacto. Como cada grupo corresponde a un único propietario, se aplica \code{\$unwind} y finalmente se proyecta una salida con el identificador del propietario, la cantidad total de pacientes, los datos del propietario y el detalle de las mascotas asociadas.
+
+La consulta cuenta pacientes registrados, no solamente pacientes activos, porque la consigna no restringe este punto a mascotas activas. Por eso el resultado conserva el campo \code{activo} en cada paciente: permite ver si alguna de las mascotas asociadas está dada de baja lógicamente sin excluirla del conteo. El resultado se ordena por cantidad de pacientes en forma descendente y, ante empate, por identificador de propietario.
+
+\begin{codeblock}[Ejemplo de resultado de Query 4]{json}
+[
+  {
+    "cantidad_pacientes": 3,
+    "pacientes": [
+      {
+        "_id": "P001",
+        "nombre": "Firulais",
+        "especie": "Perro",
+        "raza": "Labrador",
+        "activo": true
+      },
+      {
+        "_id": "P003",
+        "nombre": "Coco",
+        "especie": "Perro",
+        "raza": "Beagle",
+        "activo": false
+      },
+      {
+        "_id": "P018",
+        "nombre": "Pelusa",
+        "especie": "Conejo",
+        "raza": "Holland Lop",
+        "activo": true
+      }
+    ],
+    "propietario": {
+      "_id": "C001",
+      "nombre": "Ana",
+      "apellido": "Rodriguez",
+      "email": "ana@gmail.com",
+      "telefono": "1145001234",
+      "ciudad": "Buenos Aires",
+      "provincia": "Buenos Aires",
+      "activo": true
+    },
+    "id_propietario": "C001"
+  }
+]
+\end{codeblock}
+
+\subsubsection{Query 6: Pacientes con vacunas vencidas}
+
+La sexta query expone el endpoint \code{GET /api/pacientes-vacunas-vencidas} y lista los pacientes que tienen al menos una vacunación cuya próxima dosis es anterior a la fecha actual. Se resuelve íntegramente en MongoDB usando las colecciones \code{vacunaciones} y \code{pacientes}.
+
+El pipeline parte de \code{vacunaciones}, porque el criterio de vencimiento está en el campo \code{proxima\_dosis}. La función toma la fecha del sistema, la normaliza al inicio del día y filtra con \code{\$match} las vacunaciones donde \code{proxima\_dosis < hoy}. Esta normalización evita marcar como vencida una vacuna cuya próxima dosis sea el mismo día de ejecución.
+
+Después, la query agrupa por paciente. Para cada uno calcula la cantidad de vacunas vencidas, conserva el detalle en un arreglo y obtiene la próxima dosis más antigua con \code{\$min}. Luego realiza un \code{\$lookup} contra \code{pacientes} para incorporar los datos básicos del animal y proyecta el resultado final.
+
+El ordenamiento usa primero \code{proxima\_dosis\_mas\_antigua} en forma ascendente, de modo que los pacientes con vencimientos más antiguos aparezcan antes. Esto permite usar la consulta como una lista de priorización operativa para contactar propietarios o programar revacunaciones.
+
+Esta query justifica mantener las vacunaciones como colección separada de las consultas. El vencimiento de una vacuna no depende del diagnóstico ni del costo de una atención, sino de una fecha propia del calendario sanitario del paciente.
+
+\begin{codeblock}[Ejemplo de resultado de Query 6]{json}
+[
+  {
+    "cantidad_vacunas_vencidas": 2,
+    "vacunas_vencidas": [
+      {
+        "id_vacuna": "VAC022",
+        "nombre_vacuna": "Sextuple",
+        "fecha_aplicacion": "2024-06-10T00:00:00.000Z",
+        "proxima_dosis": "2025-06-10T00:00:00.000Z",
+        "id_vet": "V001"
+      },
+      {
+        "id_vacuna": "VAC031",
+        "nombre_vacuna": "Triple Felina",
+        "fecha_aplicacion": "2024-04-15T00:00:00.000Z",
+        "proxima_dosis": "2025-04-15T00:00:00.000Z",
+        "id_vet": "V001"
+      }
+    ],
+    "proxima_dosis_mas_antigua": "2025-04-15T00:00:00.000Z",
+    "paciente": {
+      "_id": "P003",
+      "nombre": "Coco",
+      "especie": "Perro",
+      "raza": "Beagle",
+      "activo": false
+    }
+  }
+]
+\end{codeblock}
+
 \subsection{Queries resueltas con Redis}
 
 \subsection{Queries que combinan MongoDB y Redis}
 
 \subsection{Queries cacheadas}
+
+\subsubsection{Query 5: Veterinarios activos con consultas en los últimos 60 días}
+
+La quinta query expone el endpoint \code{GET /api/vets-activos-consultas-60d} y lista los veterinarios activos junto con la cantidad de consultas registradas en los últimos 60 días. Se calcula con MongoDB sobre las colecciones \code{veterinarios} y \code{consultas}, y el resultado se guarda temporalmente en Redis como caché.
+
+La función toma la fecha del sistema y construye un rango de días calendario: desde el inicio del día ubicado 60 días atrás hasta el inicio del día siguiente al de ejecución. Este criterio es importante porque los datos del proyecto se cargan como fechas de día completo, no como instantes con hora clínica.
+
+El pipeline comienza desde \code{veterinarios} con un \code{\$match} sobre \code{activo: true}. Luego usa un \code{\$lookup} con pipeline correlacionado contra \code{consultas}: compara el veterinario de cada atención con el documento activo que se está procesando y filtra la fecha dentro del rango calculado. En la proyección final, la cantidad se obtiene con \code{\$size} sobre el arreglo de consultas recientes.
+
+El resultado incluye también veterinarios activos sin consultas recientes, porque la consigna pide listar veterinarios activos y su cantidad de consultas. Finalmente se ordena por \code{cantidad\_consultas\_60d} en forma descendente y, ante empates, por apellido y nombre.
+
+Esta query es buena candidata para caché porque cruza veterinarios con consultas y puede ejecutarse repetidamente desde el dashboard. Por eso se guarda en Redis bajo la clave \code{cache:vets-consultas-60d} con un TTL de 300 segundos. Cuando se registra una nueva consulta médica, la función de alta invalida esta clave para que el próximo pedido recalcule el resultado desde MongoDB.
+
+\begin{codeblock}[Ejemplo de resultado de Query 5]{json}
+[
+  {
+    "nombre": "Gabriela",
+    "apellido": "Fontana",
+    "matricula": "VET-0041",
+    "especialidad": "Clinica General",
+    "sucursal": "Palermo",
+    "activo": true,
+    "id_vet": "V001",
+    "cantidad_consultas_60d": 8
+  }
+]
+\end{codeblock}
 
 \section{Manual de Usuario}
 
