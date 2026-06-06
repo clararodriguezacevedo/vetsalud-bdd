@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { connect } from './db.js';
-export { pacientesActivosConPropietario } from './queries/index.js';
+export { pacientesActivosConPropietario, consultasEnSeguimiento } from './queries/index.js';
 
 export const cacheCtx = new AsyncLocalStorage();
 
@@ -30,62 +30,6 @@ export async function flushCache() {
   const keys = await redis.keys('cache:*');
   if (keys.length) await redis.del(keys);
   return { ok: true, eliminadas: keys.length };
-}
-
-// 2 - Consultas en seguimiento
-export async function consultasEnSeguimiento() {
-  const { db } = await connect();
-  return db
-    .collection('consultas')
-    .aggregate([
-      { $match: { estado: 'Seguimiento' } },
-      {
-        $lookup: {
-          from: 'veterinarios',
-          localField: 'id_vet',
-          foreignField: '_id',
-          as: 'veterinario',
-        },
-      },
-      { $unwind: '$veterinario' },
-      {
-        $lookup: {
-          from: 'pacientes',
-          localField: 'id_paciente',
-          foreignField: '_id',
-          as: 'paciente',
-        },
-      },
-      { $unwind: '$paciente' },
-      {
-        $project: {
-          _id: 1,
-          fecha: 1,
-          tipo: 1,
-          motivo: 1,
-          diagnostico: 1,
-          costo: 1,
-          estado: 1,
-          id_paciente: 1,
-          paciente: {
-            _id: '$paciente._id',
-            nombre: '$paciente.nombre',
-            especie: '$paciente.especie',
-            raza: '$paciente.raza',
-          },
-          veterinario: {
-            _id: '$veterinario._id',
-            nombre: '$veterinario.nombre',
-            apellido: '$veterinario.apellido',
-            matricula: '$veterinario.matricula',
-            especialidad: '$veterinario.especialidad',
-            sucursal: '$veterinario.sucursal',
-          },
-        },
-      },
-      { $sort: { fecha: -1, _id: 1 } },
-    ])
-    .toArray();
 }
 
 // 3 - Historial de paciente (consultas + vacunaciones unificados)

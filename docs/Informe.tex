@@ -478,22 +478,61 @@ La proyección incluye los datos del paciente activo y todos los campos del prop
 \begin{codeblock}[Ejemplo de resultado de Query 1]{json}
 [
   {
-    "_id": "P011",
-    "nombre": "Rocky",
+    "_id": "P005",
+    "nombre": "Rex",
     "especie": "Perro",
-    "raza": "Bulldog",
-    "fecha_nac": "2019-12-04T00:00:00.000Z",
+    "raza": "Pastor Aleman",
+    "fecha_nac": "2020-09-08T00:00:00.000Z",
     "activo": true,
     "propietario": {
-      "_id": "C008",
-      "nombre": "Federico",
-      "apellido": "Russo",
-      "dni": "29876543",
-      "email": "fede@gmail.com",
-      "telefono": "1133344455",
-      "ciudad": "Mar del Plata",
-      "provincia": "Buenos Aires",
+      "_id": "C004",
+      "nombre": "Diego",
+      "apellido": "Herrera",
+      "dni": "35789012",
+      "email": "diego@gmail.com",
+      "telefono": "1178004567",
+      "ciudad": "Mendoza",
+      "provincia": "Mendoza",
       "activo": true
+    }
+  }
+]
+\end{codeblock}
+
+\subsubsection{Query 2: Consultas en seguimiento con veterinario y costo}
+
+La segunda query expone el endpoint \code{GET /api/consultas-seguimiento} y lista las consultas médicas abiertas cuyo estado es \code{Seguimiento}. Se resuelve íntegramente en MongoDB usando las colecciones \code{consultas}, \code{veterinarios} y \code{pacientes}.
+
+El pipeline comienza con un \code{\$match} sobre \code{consultas.estado} para quedarse únicamente con las atenciones en seguimiento. Luego realiza un \code{\$lookup} contra \code{veterinarios} usando \code{id\_vet}, lo que permite mostrar el veterinario asignado a la atención. Después hace un segundo \code{\$lookup} contra \code{pacientes} para incorporar datos básicos del animal atendido. En ambos casos se usa \code{\$unwind}, porque cada consulta referencia a un único veterinario y a un único paciente.
+
+La proyección final conserva los datos principales de la consulta, incluyendo fecha, tipo, motivo, diagnóstico, estado y costo. También incluye el identificador del paciente, un bloque con datos básicos del paciente y otro bloque con los datos profesionales del veterinario. El resultado se ordena por fecha descendente para mostrar primero las atenciones más recientes que todavía requieren seguimiento.
+
+Esta query aprovecha el campo \code{estado} de la colección \code{consultas}, que permite distinguir atenciones cerradas de atenciones abiertas. También aprovecha que las atenciones clínicas, incluidas las cirugías, comparten una misma colección: el seguimiento operativo se puede consultar desde \code{consultas} sin duplicar lógica en otra entidad.
+
+\begin{codeblock}[Ejemplo de resultado de Query 2]{json}
+[
+  {
+    "_id": "CON004",
+    "id_paciente": "P004",
+    "fecha": "2025-11-01T00:00:00.000Z",
+    "tipo": "Consulta",
+    "motivo": "Perdida de apetito",
+    "diagnostico": "Estres ambiental",
+    "costo": 3800,
+    "estado": "Seguimiento",
+    "paciente": {
+      "_id": "P004",
+      "nombre": "Nube",
+      "especie": "Conejo",
+      "raza": "Angora"
+    },
+    "veterinario": {
+      "_id": "V001",
+      "nombre": "Gabriela",
+      "apellido": "Fontana",
+      "matricula": "VET-0041",
+      "especialidad": "Clinica General",
+      "sucursal": "Palermo"
     }
   }
 ]
