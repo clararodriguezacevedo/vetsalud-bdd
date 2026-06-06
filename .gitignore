@@ -2,3 +2,36 @@ node_modules/
 .env
 npm-debug.log*
 .DS_Store
+
+# =========================
+# LaTeX build files
+# =========================
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+*.vrb
+*.xdv
+*.listing
+
+# =========================
+# LaTeX temporary files
+# =========================
+*.bak
+*.tmp
+
+# =========================
+# VSCode local settings
+# =========================
+.vscode/

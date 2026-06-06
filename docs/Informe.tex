@@ -1,0 +1,527 @@
+\documentclass[12pt,a4paper]{article}
+
+% =========================================================
+% PAQUETES BÁSICOS
+% =========================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+
+% =========================================================
+% CONFIGURACIÓN GENERAL
+% =========================================================
+% Hace que cada \section empiece en una página nueva
+\let\oldsection\section
+\renewcommand{\section}{\clearpage\oldsection}
+
+\geometry{
+    left=2.5cm,
+    right=2.5cm,
+    top=2.5cm,
+    bottom=2.5cm
+}
+
+\onehalfspacing
+
+\setlength{\parindent}{1.25cm}
+\setlength{\parskip}{0.2em}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue,
+    citecolor=black
+}
+
+\graphicspath{{imagenes/}}
+
+\captionsetup{
+    labelfont=bf,
+    font=small
+}
+
+% =========================================================
+% COLORES
+% =========================================================
+\definecolor{primary}{HTML}{1F4E79}
+\definecolor{codebg}{HTML}{F6F8FA}
+\definecolor{codeframe}{HTML}{D0D7DE}
+\definecolor{codetitle}{HTML}{EAEFF5}
+\definecolor{codekeyword}{HTML}{CF222E}
+\definecolor{codestring}{HTML}{0A3069}
+\definecolor{codecomment}{HTML}{6E7781}
+\definecolor{codenumber}{HTML}{57606A}
+\definecolor{codeidentifier}{HTML}{24292F}
+
+% =========================================================
+% CONFIGURACIÓN DE SECCIONES
+% =========================================================
+\titleformat{\section}
+  {\Large\bfseries\color{primary}}
+  {\thesection}
+  {0.8em}
+  {}
+
+\titleformat{\subsection}
+  {\large\bfseries\color{primary}}
+  {\thesubsection}
+  {0.8em}
+  {}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{primary}}
+  {\thesubsubsection}
+  {0.8em}
+  {}
+
+% =========================================================
+% LENGUAJES PARA CÓDIGO
+% =========================================================
+\lstdefinelanguage{json}{
+    morestring=[b]",
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    stringstyle=\color{codestring},
+    literate=
+     *{0}{{{\color{codekeyword}0}}}{1}
+      {1}{{{\color{codekeyword}1}}}{1}
+      {2}{{{\color{codekeyword}2}}}{1}
+      {3}{{{\color{codekeyword}3}}}{1}
+      {4}{{{\color{codekeyword}4}}}{1}
+      {5}{{{\color{codekeyword}5}}}{1}
+      {6}{{{\color{codekeyword}6}}}{1}
+      {7}{{{\color{codekeyword}7}}}{1}
+      {8}{{{\color{codekeyword}8}}}{1}
+      {9}{{{\color{codekeyword}9}}}{1}
+      {:}{{{\color{codeidentifier}:}}}{1}
+      {,}{{{\color{codeidentifier},}}}{1}
+      {\{}{{{\color{codeidentifier}\{}}}{1}
+      {\}}{{{\color{codeidentifier}\}}}}{1}
+      {[}{{{\color{codeidentifier}[}}}{1}
+      {]}{{{\color{codeidentifier}]}}}{1}
+}
+
+% =========================================================
+% ESTILO DE CÓDIGO
+% =========================================================
+\lstdefinestyle{codestyle}{
+    basicstyle=\ttfamily\small\color{codeidentifier},
+    keywordstyle=\color{codekeyword}\bfseries,
+    stringstyle=\color{codestring},
+    commentstyle=\color{codecomment}\itshape,
+    numberstyle=\tiny\color{codenumber},
+    numbers=left,
+    numbersep=10pt,
+    breaklines=true,
+    breakatwhitespace=false,
+    showstringspaces=false,
+    tabsize=4,
+    keepspaces=true,
+    columns=fullflexible
+}
+
+% Bloque de código con caja prolija.
+% Uso:
+% \begin{codeblock}[Título opcional]{json}
+% ...
+% \end{codeblock}
+\newtcblisting{codeblock}[2][]{
+    listing only,
+    listing options={
+        style=codestyle,
+        language=#2
+    },
+    colback=codebg,
+    colframe=codeframe,
+    coltitle=black,
+    colbacktitle=codetitle,
+    title={#1},
+    fonttitle=\bfseries\small,
+    arc=2mm,
+    boxrule=0.5pt,
+    left=6mm,
+    right=2mm,
+    top=1mm,
+    bottom=1mm,
+    enhanced,
+    breakable
+}
+
+% Código inline
+\newtcbox{\codeinline}{
+    on line,
+    colback=codebg,
+    colframe=codeframe,
+    boxrule=0.3pt,
+    arc=1mm,
+    left=1mm,
+    right=1mm,
+    top=0.3mm,
+    bottom=0.3mm,
+    boxsep=0pt,
+    fontupper=\ttfamily\small
+}
+
+\newcommand{\code}[1]{\codeinline{#1}}
+
+% =========================================================
+% DATOS DEL INFORME
+% =========================================================
+\newcommand{\universidad}{Instituto Tecnológico de Buenos Aires}
+\newcommand{\materia}{Bases de Datos II}
+\newcommand{\titulo}{Trabajo Práctico Obligatorio}
+\newcommand{\subtitulo}{VetSalud}
+\newcommand{\grupo}{Grupo 7}
+\newcommand{\fechaEntrega}{12 junio 2026}
+
+\begin{document}
+
+% =========================================================
+% CARÁTULA
+% =========================================================
+\begin{titlepage}
+    \centering
+
+    \vspace*{1.5cm}
+
+    {\Large \universidad \par}
+
+    \vspace{2cm}
+
+    {\Large \materia \par}
+
+    \vspace{0.8cm}
+
+    {\Huge \textbf{\titulo} \par}
+
+    \vspace{0.6cm}
+
+    {\Large \subtitulo \par}
+
+    \vfill
+
+    {\Large \grupo \par}
+
+    \vspace{1cm}
+
+    \begin{flushleft}
+        \large
+        \textbf{Integrantes:}
+        \begin{itemize}
+            \item Rodriguez Acevedo, Clara - 66527
+            \item Buela, Mateo - 64680
+            \item Medina, Sol - 63577
+        \end{itemize}
+    \end{flushleft}
+
+    \vfill
+
+    {\large Fecha de entrega: \fechaEntrega \par}
+
+\end{titlepage}
+
+% =========================================================
+% ÍNDICE
+% =========================================================
+\pagenumbering{gobble}
+
+\tableofcontents
+
+\newpage
+
+% =========================================================
+% INTRODUCCIÓN
+% =========================================================
+\pagenumbering{arabic}
+\setcounter{page}{1}
+
+\section{Introducción}
+
+VetSalud es una red ficticia de clínicas veterinarias en Argentina. Este trabajo busca montar un sistema sobre una arquitectura de persistencia políglota con dos motores NoSQL. El sistema gestiona propietarios, sus mascotas o pacientes, veterinarios, consultas y cirugías, vacunaciones, y el stock farmacéutico. Las bases corren en contenedores Docker, y construimos una API REST en Node con Express junto con un dashboard web para ejecutar y visualizar las consultas.
+
+La elección de los dos motores respondió al perfil de los datos. Todo lo clínico y administrativo, es decir propietarios, pacientes, veterinarios, consultas, vacunaciones y catálogo de productos, vive en \textbf{MongoDB}. Son datos con esquemas que podrían cambiar con el tiempo y queríamos evitar que migrar fuera dificultoso. Hoy un paciente tiene nombre, especie y raza; mañana podríamos sumar peso, alergias o antecedentes médicos. En MongoDB realizamos consultas analíticas que cruzan entidades, filtran por fecha y agrupan por categoría, usando pipelines del Aggregation Framework con etapas como \code{\$match}, \code{\$lookup}, \code{\$group} y \code{\$project}.
+
+Por otra parte, utilizamos \textbf{Redis} para administrar las unidades disponibles del stock farmacéutico. Las unidades de cada producto cambian con cada consulta que consume stock, por lo que necesitábamos operaciones rápidas y atómicas sobre ese contador: leer cuántas unidades hay de un producto, listar productos con poco stock y descontar unidades reduciendo el riesgo de que dos consultas concurrentes dejen el contador en negativo. Redis también cumple un rol de caché de resultados de queries pesadas. Algunas consultas del dashboard agregan sobre toda la colección de consultas y pueden leerse seguido; cachearlas en Redis con TTL corto evita ejecutar la misma agregación todo el tiempo.
+
+El objetivo del trabajo no fue solamente implementar las consultas pedidas, sino también justificar cómo se distribuyen las responsabilidades entre ambos motores y qué ventajas aporta cada uno dentro del sistema. MongoDB concentra el dominio persistente y estructurado de la clínica, mientras que Redis se reserva para información de acceso rápido, contadores y resultados derivados.
+
+\section{Decisiones de Bases de Datos}
+
+\subsection{Elección de MongoDB}
+
+Elegimos MongoDB como base principal del dominio clínico y administrativo del sistema. La decisión se apoyó en las características del dominio y en el tipo de consultas que debíamos resolver.
+
+\begin{itemize}
+    \item \textbf{Flexibilidad de esquema:} el dominio veterinario puede cambiar con el tiempo. Hoy un paciente tiene nombre, especie, raza y fecha de nacimiento; en una versión futura podría incorporar peso, alergias, antecedentes o alertas médicas. MongoDB permite agregar estos campos sin rediseñar todo el esquema.
+
+    \item \textbf{Datos con estructura de documento:} las entidades principales del sistema tienen varios atributos propios y se representan naturalmente como documentos. Propietarios, pacientes, veterinarios, consultas, vacunaciones y productos no son simples pares clave-valor, sino registros con estructura rica.
+
+    \item \textbf{Consultas analíticas sobre el dominio:} muchas queries requieren filtrar, cruzar entidades, agrupar y proyectar resultados. Para esto usamos pipelines del Aggregation Framework con etapas como \code{\$match}, \code{\$lookup}, \code{\$group}, \code{\$project} y \code{\$sort}.
+
+    \item \textbf{Atomicidad por documento:} las operaciones principales del sistema afectan un documento central por vez, como el alta de un propietario, la modificación de sus datos, la baja lógica de un propietario o la inserción de una consulta. MongoDB garantiza atomicidad sobre cada documento, lo cual alcanza para la mayoría de las operaciones del dominio clínico.
+
+    \item \textbf{Consistencia para datos clínicos y administrativos:} en un backoffice clínico es importante no perder ni duplicar registros. Por eso usamos MongoDB como fuente principal del dominio persistente y centralizamos allí las escrituras de propietarios, pacientes, veterinarios, consultas, vacunaciones y productos.
+\end{itemize}
+
+\subsection{Elección de Redis}
+
+Elegimos Redis para resolver las partes del sistema que necesitaban acceso rápido, operaciones atómicas simples y expiración automática. En nuestro caso, Redis cumple dos roles: manejar las unidades disponibles del stock farmacéutico y cachear resultados de consultas pesadas.
+
+\begin{itemize}
+    \item \textbf{Stock como contador frecuente:} las unidades disponibles de cada producto cambian cada vez que una consulta consume insumos. Este dato se comporta más como un contador operativo que como un documento clínico, por lo que Redis resulta más adecuado que MongoDB para administrarlo.
+
+    \item \textbf{Lectura rápida de stock puntual:} la lógica de stock necesita consultar cuántas unidades quedan de un producto específico. Redis permite resolver esta lectura de forma directa y con muy baja latencia.
+
+    \item \textbf{Consulta eficiente de stock bajo:} también necesitamos listar productos cuyo stock esté por debajo de cierto umbral. Para eso usamos un \textit{Sorted Set}, donde el identificador del producto es el valor y la cantidad disponible es el score.
+
+    \item \textbf{Decremento atómico:} cuando una consulta consume productos, el decremento individual del contador debe ejecutarse de forma indivisible para evitar resultados negativos. Redis permite validar el stock disponible y descontar unidades de forma atómica mediante un script Lua.
+
+    \item \textbf{Caché con TTL:} algunas queries del dashboard agregan sobre toda la colección de consultas y pueden ejecutarse muchas veces. Redis permite guardar estos resultados con un TTL corto, evitando recalcular agregaciones costosas en cada lectura.
+\end{itemize}
+
+\subsection{División de responsabilidades entre motores}
+
+La arquitectura quedó dividida según el tipo de dato y el tipo de operación. MongoDB concentra la información persistente y descriptiva del sistema, mientras que Redis almacena datos operativos o derivados que requieren acceso rápido.
+
+\begin{itemize}
+    \item \textbf{MongoDB como fuente principal del dominio:} propietarios, pacientes, veterinarios, consultas, vacunaciones y productos viven en MongoDB. Estos datos representan el estado clínico y administrativo de VetSalud.
+
+    \item \textbf{Redis como fuente de verdad del stock:} las unidades disponibles de cada producto viven en Redis. El catálogo del producto está en MongoDB, pero la cantidad disponible se administra en Redis porque cambia con más frecuencia y requiere operaciones atómicas.
+
+    \item \textbf{Redis como caché descartable:} las claves \code{cache:*} no contienen información primaria, sino resultados derivados de consultas sobre MongoDB. Si una clave expira o se invalida, el resultado puede recalcularse.
+
+    \item \textbf{Separación por prefijos:} las claves de stock usan el prefijo \code{stock:}, mientras que las claves de caché usan \code{cache:}. Esto evita mezclar datos con semánticas distintas dentro del mismo motor.
+
+    \item \textbf{Limitación cross-motor:} MongoDB y Redis no comparten una transacción global. Por eso, en operaciones que involucran ambos motores, como registrar una consulta y descontar stock, existe una posible ventana de inconsistencia. Para reducirla, primero se valida stock en Redis, luego se inserta la consulta en MongoDB y finalmente se descuenta el stock de forma atómica.
+\end{itemize}
+\section{Modelo de Datos}
+
+El modelo de datos se diseñó pensando en las consultas que debía resolver el sistema. La idea no fue copiar un modelo relacional tradicional dentro de una base NoSQL, sino repartir la información según el tipo de dato y el tipo de operación esperada. MongoDB concentra las entidades clínicas y administrativas, mientras que Redis guarda estructuras específicas para stock y caché.
+
+El sistema utiliza la base MongoDB \code{vetsalud}, salvo que se configure otro nombre mediante variables de entorno. Durante la carga inicial, el script de seed lee los archivos CSV, transforma los tipos de datos necesarios y carga las colecciones desde cero. Los identificadores provistos por los datasets se conservan como \code{\_id} de cada documento.
+
+\subsection{Modelo en MongoDB}
+
+En MongoDB se guardan las entidades principales del dominio de VetSalud: propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. Cada una se representa como una colección independiente porque tiene identidad propia y puede ser consultada desde distintos puntos del sistema.
+
+Las colecciones principales son:
+
+\begin{itemize}
+    \item \code{propietarios}
+    \item \code{pacientes}
+    \item \code{veterinarios}
+    \item \code{consultas}
+    \item \code{vacunaciones}
+    \item \code{productos}
+\end{itemize}
+
+La decisión general fue mantener las relaciones mediante referencias por id. Por ejemplo, un paciente referencia a su propietario con \code{id\_propietario}, y una consulta referencia tanto al paciente como al veterinario mediante \code{id\_paciente} e \code{id\_vet}. Esto permite mantener las entidades separadas y evitar duplicar información descriptiva, pero al mismo tiempo deja disponible la posibilidad de cruzarlas mediante \code{\$lookup} cuando una query necesita información combinada.
+
+Los propietarios contienen la información de contacto y ubicación de cada cliente de la clínica. Además, incluyen un campo \code{activo}, utilizado para implementar baja lógica. Esta decisión permite conservar los datos históricos aunque un propietario deje de estar activo.
+
+\begin{codeblock}[Ejemplo de propietario]{json}
+{
+  "_id": "C001",
+  "nombre": "Ana",
+  "apellido": "Rodriguez",
+  "dni": "30456789",
+  "email": "ana@gmail.com",
+  "telefono": "1145001234",
+  "ciudad": "Buenos Aires",
+  "provincia": "Buenos Aires",
+  "activo": true
+}
+\end{codeblock}
+
+Los pacientes representan las mascotas atendidas por VetSalud. Cada paciente referencia a su propietario, pero no se encuentra embebido dentro del documento del dueño. Elegimos esta separación porque un propietario puede tener varios pacientes y porque muchas consultas necesitan trabajar directamente sobre la colección de pacientes. El campo \code{fecha\_nac} se carga como fecha en MongoDB.
+
+\begin{codeblock}[Ejemplo de paciente]{json}
+{
+  "_id": "P001",
+  "nombre": "Firulais",
+  "especie": "Perro",
+  "raza": "Labrador",
+  "fecha_nac": "2019-04-12T00:00:00.000Z",
+  "id_propietario": "C001",
+  "activo": true
+}
+\end{codeblock}
+
+Los veterinarios se modelan como una colección propia porque son una entidad central para varias consultas del sistema. Además de los datos profesionales, cada veterinario tiene una sucursal asociada. Esta decisión es importante porque algunas queries necesitan vincular pacientes o atenciones con la sucursal del veterinario que las realizó.
+
+\begin{codeblock}[Ejemplo de veterinario]{json}
+{
+  "_id": "V001",
+  "nombre": "Gabriela",
+  "apellido": "Fontana",
+  "matricula": "VET-0041",
+  "especialidad": "Clinica General",
+  "sucursal": "Palermo",
+  "activo": true
+}
+\end{codeblock}
+
+Una de las decisiones más importantes del modelo fue guardar consultas y cirugías en una misma colección llamada \code{consultas}. Ambas representan atenciones clínicas y comparten la mayor parte de sus campos: paciente, veterinario, fecha, motivo, diagnóstico, costo y estado. Para diferenciarlas se utiliza el campo \code{tipo}. Esto evita duplicar pipelines y simplifica las queries que trabajan sobre historial clínico, diagnósticos frecuentes o ingresos por veterinario.
+
+\begin{codeblock}[Ejemplo de consulta]{json}
+{
+  "_id": "CON001",
+  "id_paciente": "P001",
+  "id_vet": "V001",
+  "fecha": "2025-10-05T00:00:00.000Z",
+  "tipo": "Consulta",
+  "motivo": "Control anual",
+  "diagnostico": "Sano",
+  "costo": 4500,
+  "estado": "Cerrada"
+}
+\end{codeblock}
+
+Las vacunaciones se guardan en una colección separada. Aunque también se relacionan con pacientes y veterinarios, su estructura tiene otra semántica: lo central es la vacuna aplicada y la fecha de próxima dosis. Mezclarlas con consultas hubiera generado documentos con campos opcionales y no aportaba una ventaja clara para las queries pedidas. Los campos \code{fecha\_aplicacion} y \code{proxima\_dosis} se cargan como fechas.
+
+\begin{codeblock}[Ejemplo de vacunación]{json}
+{
+  "_id": "VAC001",
+  "id_paciente": "P001",
+  "id_vet": "V001",
+  "fecha_aplicacion": "2025-10-05T00:00:00.000Z",
+  "nombre_vacuna": "Antirrabica",
+  "proxima_dosis": "2026-10-05T00:00:00.000Z"
+}
+\end{codeblock}
+
+Por último, la colección \code{productos} guarda el catálogo farmacéutico. En MongoDB se conserva la información descriptiva y relativamente estable de cada producto, como nombre, categoría, precio unitario, vencimiento y proveedor. La cantidad disponible no se guarda en esta colección porque forma parte del stock operativo, que cambia con mayor frecuencia y se administra en Redis.
+
+\begin{codeblock}[Ejemplo de producto]{json}
+{
+  "_id": "PRD001",
+  "nombre": "Amoxicilina 250mg",
+  "categoria": "Antibiotico",
+  "precio_unit": 850,
+  "vencimiento": "2026-06-30T00:00:00.000Z",
+  "proveedor": "VetFarma SA"
+}
+\end{codeblock}
+
+Además de las colecciones, se definieron índices sobre campos usados frecuentemente en filtros, relaciones o rangos. El seed crea índices sobre \code{fecha} e \code{id\_vet} en \code{consultas}, sobre \code{id\_propietario} en \code{pacientes}, y sobre \code{proveedor} y \code{vencimiento} en \code{productos}. Estos índices acompañan las consultas implementadas y evitan depender únicamente de recorridos completos sobre las colecciones.
+
+\subsection{Modelo en Redis}
+
+Redis se usa con un modelo más acotado que MongoDB. No se intentó replicar las entidades clínicas ni duplicar el dominio completo, sino guardar únicamente estructuras donde Redis aporta una ventaja clara: unidades disponibles del stock farmacéutico y caché de consultas pesadas.
+
+La estructura principal es \code{stock:unidades}, un \textit{Sorted Set} donde cada producto tiene como valor su identificador y como score la cantidad disponible. Esta estructura se carga desde el campo \code{unidades} del CSV de stock farmacéutico.
+
+\begin{codeblock}[Estructura de stock en Redis]{}
+stock:unidades
+
+value    score
+PRD001   120
+PRD004    40
+PRD006    25
+PRD017    15
+\end{codeblock}
+
+El uso de un \textit{Sorted Set} responde directamente a la necesidad de ordenar y filtrar por cantidad disponible. Para la consulta de stock bajo, Redis permite buscar por rango sobre el score y obtener rápidamente los productos por debajo de un umbral.
+
+\begin{codeblock}[Consulta de stock bajo]{}
+ZRANGEBYSCORE stock:unidades -inf 49
+\end{codeblock}
+
+El descuento de stock es el caso más sensible porque involucra concurrencia sobre un contador compartido. Por eso, la lógica de decremento se ejecuta dentro de Redis mediante un script Lua atómico, que verifica existencia, valida cantidad suficiente y descuenta en una única operación indivisible.
+
+Además del stock, Redis guarda resultados cacheados de algunas queries del dashboard. Estas claves siguen el prefijo \code{cache:} y contienen resultados serializados en JSON con un TTL corto. Esto permite acelerar consultas frecuentes sin convertir esos resultados en fuente de verdad.
+
+Las claves de caché usadas por el sistema son:
+
+\begin{itemize}
+    \item \code{cache:vets-consultas-60d}, con TTL de 300 segundos.
+    \item \code{cache:top-diagnosticos}, con TTL de 300 segundos.
+    \item \code{cache:ingresos-vet-mes}, con TTL de 60 segundos.
+\end{itemize}
+
+Estas claves representan información derivada. Si expiran o se invalidan, el resultado puede recalcularse desde MongoDB. Por eso tienen una semántica distinta a \code{stock:unidades}: el stock representa estado operativo del sistema, mientras que la caché representa resultados temporales.
+
+\subsection{Relación entre ambos motores}
+
+La relación entre MongoDB y Redis aparece principalmente en el manejo del stock farmacéutico. MongoDB guarda el catálogo de productos, mientras que Redis guarda las unidades disponibles. Esto significa que para mostrar productos con stock bajo el sistema combina información de ambos motores: Redis identifica rápidamente qué productos están por debajo del umbral y MongoDB aporta los datos descriptivos de esos productos.
+
+Este diseño evita duplicar información descriptiva. Redis no necesita saber el nombre, proveedor o vencimiento de cada producto; solo necesita saber cuántas unidades quedan. MongoDB, por su parte, no necesita actualizar constantemente un contador de stock que cambia con cada consulta. Cada motor conserva la parte del dato que mejor se adapta a su modelo.
+
+La relación también aparece en las queries cacheadas. En esos casos, MongoDB sigue siendo la fuente de verdad: la query se calcula sobre sus colecciones y el resultado se guarda temporalmente en Redis. Redis no reemplaza a MongoDB, sino que funciona como una capa de aceleración para lecturas frecuentes.
+
+Esta separación tiene una limitación: no existe una transacción global entre ambos motores. Por ejemplo, al registrar una consulta que consume productos, el sistema debe insertar el documento de la consulta en MongoDB y descontar unidades en Redis. Para reducir el riesgo de inconsistencias, se valida el stock antes de insertar la consulta y se descuenta mediante una operación atómica en Redis. Sin embargo, la coordinación entre ambos motores sigue siendo una limitación inherente de la arquitectura elegida.
+
+\section{Implementación de las Queries}
+
+\subsection{Queries resueltas con MongoDB}
+
+\subsubsection{Query 1: Pacientes activos con datos de propietario}
+
+La primera query expone el endpoint \code{GET /api/pacientes-activos} y resuelve el listado de pacientes activos junto con los datos completos de su propietario. Se implementa sobre MongoDB utilizando las colecciones \code{pacientes} y \code{propietarios}.
+
+La consulta primero filtra los documentos de \code{pacientes} cuyo campo \code{activo} vale \code{true}. Luego utiliza \code{\$lookup} para unir cada paciente con su propietario, comparando \code{pacientes.id\_propietario} contra \code{propietarios.\_id}. Como cada paciente tiene un único propietario, se aplica \code{\$unwind} sobre el resultado de la unión y finalmente se proyectan los campos relevantes.
+
+Esta query aprovecha directamente la decisión de modelar pacientes y propietarios como colecciones separadas vinculadas por referencia. De esta forma, no se duplica la información del propietario dentro de cada paciente, pero se puede reconstruir el resultado combinado cuando el caso de uso lo requiere.
+
+La proyección incluye los datos del paciente activo y todos los campos del propietario cargados por el seed: identificador, nombre, apellido, DNI, email, teléfono, ciudad, provincia y estado lógico.
+
+\begin{codeblock}[Ejemplo de resultado de Query 1]{json}
+[
+  {
+    "_id": "P011",
+    "nombre": "Rocky",
+    "especie": "Perro",
+    "raza": "Bulldog",
+    "fecha_nac": "2019-12-04T00:00:00.000Z",
+    "activo": true,
+    "propietario": {
+      "_id": "C008",
+      "nombre": "Federico",
+      "apellido": "Russo",
+      "dni": "29876543",
+      "email": "fede@gmail.com",
+      "telefono": "1133344455",
+      "ciudad": "Mar del Plata",
+      "provincia": "Buenos Aires",
+      "activo": true
+    }
+  }
+]
+\end{codeblock}
+
+\subsection{Queries resueltas con Redis}
+
+\subsection{Queries que combinan MongoDB y Redis}
+
+\subsection{Queries cacheadas}
+
+\section{Manual de Usuario}
+
+\section{Resultados}
+
+\section{Dificultades y Limitaciones}
+
+\section{Conclusiones}
+
+% =========================================================
+% REFERENCIAS
+% =========================================================
+\section{Referencias}
+
+\begin{itemize}
+    \item Documentación oficial de MongoDB: \url{https://www.mongodb.com/docs/}
+    \item Documentación oficial de Redis: \url{https://redis.io/docs/latest/}
+    \item Documentación de Docker: \url{https://docs.docker.com/}
+\end{itemize}
+
+\end{document}

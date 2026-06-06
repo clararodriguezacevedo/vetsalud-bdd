@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { connect } from './db.js';
+export { pacientesActivosConPropietario } from './queries/index.js';
 
 export const cacheCtx = new AsyncLocalStorage();
 
@@ -29,39 +30,6 @@ export async function flushCache() {
   const keys = await redis.keys('cache:*');
   if (keys.length) await redis.del(keys);
   return { ok: true, eliminadas: keys.length };
-}
-
-// 1 - Pacientes activos con propietario
-export async function pacientesActivosConPropietario() {
-  const { db } = await connect();
-  return db
-    .collection('pacientes')
-    .aggregate([
-      { $match: { activo: true } },
-      {
-        $lookup: {
-          from: 'propietarios',
-          localField: 'id_propietario',
-          foreignField: '_id',
-          as: 'propietario',
-        },
-      },
-      { $unwind: '$propietario' },
-      {
-        $project: {
-          nombre: 1, especie: 1, raza: 1, fecha_nac: 1, activo: 1,
-          'propietario._id': 1,
-          'propietario.nombre': 1,
-          'propietario.apellido': 1,
-          'propietario.email': 1,
-          'propietario.telefono': 1,
-          'propietario.ciudad': 1,
-          'propietario.provincia': 1,
-          'propietario.activo': 1,
-        },
-      },
-    ])
-    .toArray();
 }
 
 // 2 - Consultas en seguimiento
