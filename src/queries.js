@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { connect } from './db.js';
-export { pacientesActivosConPropietario, consultasEnSeguimiento } from './queries/index.js';
+export { pacientesActivosConPropietario, consultasEnSeguimiento, historialPaciente } from './queries/index.js';
 
 export const cacheCtx = new AsyncLocalStorage();
 
@@ -30,87 +30,6 @@ export async function flushCache() {
   const keys = await redis.keys('cache:*');
   if (keys.length) await redis.del(keys);
   return { ok: true, eliminadas: keys.length };
-}
-
-// 3 - Historial de paciente (consultas + vacunaciones unificados)
-export async function historialPaciente(idPaciente) {
-  const { db } = await connect();
-  const paciente = await db.collection('pacientes').findOne({ _id: idPaciente });
-  if (!paciente) throw new Error(`El paciente ${idPaciente} no existe`);
-
-  const [consultas, vacunaciones] = await Promise.all([
-    db.collection('consultas').aggregate([
-      { $match: { id_paciente: idPaciente } },
-      {
-        $lookup: {
-          from: 'veterinarios',
-          localField: 'id_vet',
-          foreignField: '_id',
-          as: 'veterinario',
-        },
-      },
-      { $unwind: '$veterinario' },
-      {
-        $project: {
-          _id: 0,
-          tipo_evento: { $literal: 'Consulta' },
-          id_evento: '$_id',
-          fecha: 1,
-          paciente: { _id: paciente._id, nombre: paciente.nombre, especie: paciente.especie, raza: paciente.raza },
-          veterinario: {
-            _id: '$veterinario._id',
-            nombre: '$veterinario.nombre',
-            apellido: '$veterinario.apellido',
-            matricula: '$veterinario.matricula',
-            sucursal: '$veterinario.sucursal',
-          },
-          motivo: 1,
-          diagnostico: 1,
-          costo: 1,
-          estado: 1,
-          nombre_vacuna: { $literal: null },
-          proxima_dosis: { $literal: null },
-        },
-      },
-    ]).toArray(),
-    db.collection('vacunaciones').aggregate([
-      { $match: { id_paciente: idPaciente } },
-      {
-        $lookup: {
-          from: 'veterinarios',
-          localField: 'id_vet',
-          foreignField: '_id',
-          as: 'veterinario',
-        },
-      },
-      { $unwind: '$veterinario' },
-      {
-        $project: {
-          _id: 0,
-          tipo_evento: { $literal: 'Vacunacion' },
-          id_evento: '$_id',
-          fecha: '$fecha_aplicacion',
-          paciente: { _id: paciente._id, nombre: paciente.nombre, especie: paciente.especie, raza: paciente.raza },
-          veterinario: {
-            _id: '$veterinario._id',
-            nombre: '$veterinario.nombre',
-            apellido: '$veterinario.apellido',
-            matricula: '$veterinario.matricula',
-            sucursal: '$veterinario.sucursal',
-          },
-          motivo: { $literal: null },
-          diagnostico: { $literal: null },
-          costo: { $literal: null },
-          estado: { $literal: null },
-          nombre_vacuna: 1,
-          proxima_dosis: 1,
-        },
-      },
-    ]).toArray(),
-  ]);
-
-  return [...consultas, ...vacunaciones]
-    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || String(a.id_evento).localeCompare(String(b.id_evento)));
 }
 
 // 4 - Propietarios con más de un paciente

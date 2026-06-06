@@ -538,6 +538,73 @@ Esta query aprovecha el campo \code{estado} de la colección \code{consultas}, q
 ]
 \end{codeblock}
 
+\subsubsection{Query 3: Historial completo de un paciente}
+
+La tercera query expone el endpoint \code{GET /api/historial-paciente/:id} y reconstruye el historial clínico de un paciente a partir de sus consultas y vacunaciones. Se resuelve principalmente con MongoDB, usando las colecciones \code{pacientes}, \code{consultas}, \code{vacunaciones} y \code{veterinarios}, y luego combina los resultados en Node.js.
+
+Antes de ejecutar los pipelines, la función valida que el paciente solicitado exista. Si el identificador no corresponde a ningún documento de \code{pacientes}, se devuelve un error. Esta validación evita construir historiales sobre pacientes inexistentes.
+
+La implementación ejecuta dos agregaciones en paralelo. La primera consulta la colección \code{consultas}, filtra por \code{id\_paciente}, une cada atención con su veterinario mediante \code{\$lookup} y proyecta el evento con un formato común. La segunda hace lo mismo sobre \code{vacunaciones}, usando \code{fecha\_aplicacion} como fecha del evento e incorporando los campos propios de vacunas, como \code{nombre\_vacuna} y \code{proxima\_dosis}.
+
+Se decidió realizar la combinación final en la capa de servicio porque el historial integra eventos de dos colecciones con estructuras distintas. MongoDB concentra el trabajo más pesado de cada origen: filtra por paciente, resuelve la unión con veterinarios y proyecta cada evento con los campos necesarios. Node.js queda limitado a una tarea de orquestación: llevar ambas listas a un formato común, unirlas y aplicar el criterio de ordenamiento final.
+
+Ambos resultados se normalizan a una misma estructura con campos como \code{tipo\_evento}, \code{id\_evento}, \code{fecha}, \code{paciente} y \code{veterinario}. Luego se concatenan en Node.js y se ordenan por fecha descendente, mostrando primero los eventos más recientes. En caso de empate de fecha, se usa el identificador del evento como segundo criterio de orden.
+
+Esta query justifica dos decisiones de modelado. Por un lado, consultas y cirugías comparten la colección \code{consultas}, por lo que todas las atenciones clínicas del paciente se recuperan desde el mismo origen. Por otro lado, vacunaciones se mantiene como colección separada porque tiene una semántica distinta, pero puede integrarse al historial mediante una normalización final del resultado.
+
+\begin{codeblock}[Fragmento de resultado de Query 3 para P001]{json}
+[
+  {
+    "tipo_evento": "Consulta",
+    "id_evento": "CON007",
+    "fecha": "2025-12-02T00:00:00.000Z",
+    "paciente": {
+      "_id": "P001",
+      "nombre": "Firulais",
+      "especie": "Perro",
+      "raza": "Labrador"
+    },
+    "veterinario": {
+      "_id": "V001",
+      "nombre": "Gabriela",
+      "apellido": "Fontana",
+      "matricula": "VET-0041",
+      "sucursal": "Palermo"
+    },
+    "motivo": "Control post-vacuna",
+    "diagnostico": "Sin novedades",
+    "costo": 2000,
+    "estado": "Cerrada",
+    "nombre_vacuna": null,
+    "proxima_dosis": null
+  },
+  {
+    "tipo_evento": "Vacunacion",
+    "id_evento": "VAC001",
+    "fecha": "2025-10-05T00:00:00.000Z",
+    "paciente": {
+      "_id": "P001",
+      "nombre": "Firulais",
+      "especie": "Perro",
+      "raza": "Labrador"
+    },
+    "veterinario": {
+      "_id": "V001",
+      "nombre": "Gabriela",
+      "apellido": "Fontana",
+      "matricula": "VET-0041",
+      "sucursal": "Palermo"
+    },
+    "motivo": null,
+    "diagnostico": null,
+    "costo": null,
+    "estado": null,
+    "nombre_vacuna": "Antirrabica",
+    "proxima_dosis": "2026-10-05T00:00:00.000Z"
+  }
+]
+\end{codeblock}
+
 \subsection{Queries resueltas con Redis}
 
 \subsection{Queries que combinan MongoDB y Redis}
