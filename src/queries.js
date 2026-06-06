@@ -8,68 +8,10 @@ export {
   propietariosConMultiplesPacientes,
   veterinariosActivosConConsultas60d,
   pacientesConVacunasVencidas,
+  topDiagnosticos,
+  stockBajo,
+  controlesBaratos,
 } from './queries/index.js';
-
-// 7 - Top 5 diagnósticos (cacheado)
-export async function topDiagnosticos() {
-  return cached('cache:top-diagnosticos', 300, async () => {
-    const { db } = await connect();
-    return db
-      .collection('consultas')
-      .aggregate([
-        { $group: { _id: '$diagnostico', total: { $sum: 1 } } },
-        { $sort: { total: -1 } },
-        { $limit: 5 },
-      ])
-      .toArray();
-  });
-}
-
-// 8 - Stock bajo (Redis sorted set + Mongo master data)
-export async function stockBajo(umbral = 50) {
-  const { db, redis } = await connect();
-  const entries = await redis.zRangeByScoreWithScores('stock:unidades', '-inf', umbral - 1);
-  if (entries.length === 0) return [];
-  const ids = entries.map((e) => e.value);
-  const meta = await db.collection('productos').find({ _id: { $in: ids } }).toArray();
-  const metaMap = new Map(meta.map((p) => [p._id, p]));
-  return entries.map((e) => ({
-    ...(metaMap.get(e.value) || { _id: e.value }),
-    unidades: Number(e.score),
-  }));
-}
-
-// 9 - Consultas tipo Control con costo bajo umbral
-export async function controlesBaratos(maxCosto = 5000) {
-  const { db } = await connect();
-  return db
-    .collection('consultas')
-    .aggregate([
-      {
-        $match: {
-          tipo: 'Consulta',
-          costo: { $lt: maxCosto },
-        },
-      },
-      {
-        $lookup: {
-          from: 'pacientes',
-          localField: 'id_paciente',
-          foreignField: '_id',
-          as: 'paciente',
-        },
-      },
-      { $unwind: '$paciente' },
-      { $sort: { costo: 1 } },
-      {
-        $project: {
-          motivo: 1, diagnostico: 1, costo: 1, fecha: 1,
-          'paciente.nombre': 1, 'paciente.especie': 1,
-        },
-      },
-    ])
-    .toArray();
-}
 
 // 10 - Pacientes de una sucursal (vía consultas + vacunaciones)
 export async function pacientesPorSucursal(sucursal) {

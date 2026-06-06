@@ -701,9 +701,66 @@ Esta query justifica mantener las vacunaciones como colección separada de las c
 ]
 \end{codeblock}
 
+\subsubsection{Query 9: Consultas de control con costo menor a \$5.000}
+
+La novena query expone el endpoint \code{GET /api/controles-baratos?max=5000} y lista las consultas de control cuyo costo es menor al umbral indicado. Se resuelve con MongoDB usando las colecciones \code{consultas} y \code{pacientes}.
+
+En los datos cargados, el campo \code{tipo} distingue principalmente entre \code{Consulta} y \code{Cirugia}; no existe un tipo separado llamado \code{Control}. Por eso se interpreta ``control'' a partir del campo \code{motivo}, seleccionando las consultas cuyo motivo comienza con esa palabra. Al mismo tiempo, se mantiene el filtro \code{tipo = Consulta} para excluir cirugías y otras atenciones clínicas que no correspondan al caso pedido.
+
+El pipeline aplica un \code{\$match} compuesto sobre \code{tipo}, \code{motivo} y \code{costo}. Luego hace un \code{\$lookup} contra \code{pacientes} para mostrar el animal atendido, aplica \code{\$unwind} porque cada consulta tiene un único paciente, ordena por costo ascendente y proyecta los datos principales de la atención.
+
+\begin{codeblock}[Ejemplo de resultado de Query 9]{json}
+[
+  {
+    "_id": "CON007",
+    "fecha": "2025-12-02T00:00:00.000Z",
+    "motivo": "Control post-vacuna",
+    "diagnostico": "Sin novedades",
+    "costo": 2000,
+    "paciente": {
+      "nombre": "Firulais",
+      "especie": "Perro"
+    }
+  }
+]
+\end{codeblock}
+
 \subsection{Queries resueltas con Redis}
 
 \subsection{Queries que combinan MongoDB y Redis}
+
+\subsubsection{Query 8: Stock de productos con menos de 50 unidades}
+
+La octava query expone el endpoint \code{GET /api/stock-bajo?umbral=50} y lista productos cuyo stock se encuentra por debajo del umbral indicado. Es una query políglota: Redis identifica rápidamente los productos con pocas unidades y MongoDB aporta la información descriptiva del catálogo.
+
+En Redis se usa la clave \code{stock:unidades}, modelada como un \textit{Sorted Set}. El identificador del producto es el valor del conjunto y la cantidad disponible es el score. La consulta usa un rango por score para obtener los productos con unidades menores al umbral, manteniendo el orden ascendente por stock.
+
+Luego, con los identificadores devueltos por Redis, la función consulta la colección \code{productos} en MongoDB mediante \code{\$in}. MongoDB devuelve los campos de catálogo, como nombre, categoría, precio unitario, vencimiento y proveedor. Finalmente, Node.js combina ambos resultados conservando el orden que vino de Redis.
+
+Esta query justifica la separación entre catálogo y stock operativo. MongoDB no necesita actualizar un contador de unidades con cada operación, y Redis no necesita duplicar los datos descriptivos del producto. Cada motor conserva la parte del dato que resuelve mejor.
+
+\begin{codeblock}[Fragmento de resultado de Query 8]{json}
+[
+  {
+    "_id": "PRD017",
+    "nombre": "Insulina canina",
+    "categoria": "Hormonal",
+    "precio_unit": 8500,
+    "vencimiento": "2026-08-15T00:00:00.000Z",
+    "proveedor": "MediAnimal",
+    "unidades": 15
+  },
+  {
+    "_id": "PRD015",
+    "nombre": "Praziquantel 50mg",
+    "categoria": "Antiparasitario",
+    "precio_unit": 1300,
+    "vencimiento": "2026-06-30T00:00:00.000Z",
+    "proveedor": "VetFarma SA",
+    "unidades": 20
+  }
+]
+\end{codeblock}
 
 \subsection{Queries cacheadas}
 
@@ -730,6 +787,41 @@ Esta query es buena candidata para caché porque cruza veterinarios con consulta
     "activo": true,
     "id_vet": "V001",
     "cantidad_consultas_60d": 8
+  }
+]
+\end{codeblock}
+
+\subsubsection{Query 7: Top 5 diagnósticos más frecuentes}
+
+La séptima query expone el endpoint \code{GET /api/top-diagnosticos} y obtiene los cinco diagnósticos más frecuentes registrados en las atenciones. Se calcula con MongoDB sobre la colección \code{consultas} y se guarda temporalmente en Redis como caché.
+
+El pipeline agrupa los documentos por \code{diagnostico}, cuenta ocurrencias con \code{\$sum}, ordena de mayor a menor por cantidad y limita el resultado a cinco elementos. La salida conserva el diagnóstico como identificador del grupo y agrega el campo \code{total}.
+
+Esta query aprovecha que consultas y cirugías se guardan en la misma colección de atenciones clínicas. De esa forma, el análisis de diagnósticos frecuentes se calcula sobre el historial clínico completo que vive en \code{consultas}, sin tener que duplicar el pipeline para otra colección.
+
+Como es una agregación que puede consultarse muchas veces desde el dashboard y no necesita recalcularse en cada lectura, el resultado se cachea en Redis bajo la clave \code{cache:top-diagnosticos} con un TTL de 300 segundos. Cuando se registra una nueva consulta médica, la función de alta invalida esta clave para que el siguiente pedido vuelva a calcular el ranking desde MongoDB.
+
+\begin{codeblock}[Ejemplo de resultado de Query 7]{json}
+[
+  {
+    "_id": "Sano",
+    "total": 7
+  },
+  {
+    "_id": "Otitis externa",
+    "total": 5
+  },
+  {
+    "_id": "Dermatitis atopica",
+    "total": 4
+  },
+  {
+    "_id": "Infestacion parasitaria",
+    "total": 3
+  },
+  {
+    "_id": "Cirugia exitosa",
+    "total": 2
   }
 ]
 \end{codeblock}

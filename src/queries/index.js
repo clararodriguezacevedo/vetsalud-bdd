@@ -4,3 +4,6 @@ export { historialPaciente } from './q03-historial-paciente.js';
 export { propietariosConMultiplesPacientes } from './q04-propietarios-multiples-pacientes.js';
 export { veterinariosActivosConConsultas60d } from './q05-veterinarios-activos-consultas-60d.js';
 export { pacientesConVacunasVencidas } from './q06-pacientes-vacunas-vencidas.js';
+export { topDiagnosticos } from './q07-top-diagnosticos.js';
+export { stockBajo } from './q08-stock-bajo.js';
+export { controlesBaratos } from './q09-controles-baratos.js';
