@@ -5,6 +5,8 @@ import { connect } from '../db.js';
  *
  * Requisito de la consigna:
  * listar consultas de tipo Control con costo menor a $5.000.
+ * En este modelo, Control se interpreta como una consulta medica no quirurgica,
+ * representada por tipo = Consulta.
  *
  * Motor: MongoDB.
  * Colecciones: consultas, pacientes.
@@ -18,7 +20,6 @@ export async function controlesBaratos(maxCosto = 5000) {
       {
         $match: {
           tipo: 'Consulta',
-          motivo: { $regex: '^Control', $options: 'i' },
           costo: { $lt: maxCosto },
         },
       },

@@ -1,4 +1,4 @@
-\documentclass[12pt,a4paper]{article}
+\documentclass[10pt,a4paper]{article}
 
 % =========================================================
 % PAQUETES BÁSICOS
@@ -15,6 +15,8 @@
 \usepackage{caption}
 \usepackage{listings}
 \usepackage[most]{tcolorbox}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
 \usepackage{titlesec}
 
 % =========================================================
@@ -318,6 +320,31 @@ El modelo de datos se diseñó pensando en las consultas que debía resolver el 
 
 El sistema utiliza la base MongoDB \code{vetsalud}, salvo que se configure otro nombre mediante variables de entorno. Durante la carga inicial, el script de seed lee los archivos CSV, transforma los tipos de datos necesarios y carga las colecciones desde cero. Los identificadores provistos por los datasets se conservan como \code{\_id} de cada documento.
 
+\subsection{Carga y extensión de los datasets}
+
+Los archivos ubicados en \code{data/} parten de los CSV entregados por la cátedra, pero fueron extendidos con registros propios para cumplir el requisito de incorporar al menos 10 registros adicionales por colección o tabla. La carga se realiza desde esos CSV extendidos mediante \code{npm run seed}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Dataset} & \textbf{Registros cátedra} & \textbf{Registros usados} & \textbf{Agregados} \\
+\hline
+\code{propietarios.csv} & 6 & 18 & 12 \\
+\code{pacientes.csv} & 8 & 22 & 14 \\
+\code{veterinarios.csv} & 5 & 15 & 10 \\
+\code{consultas.csv} & 8 & 29 & 21 \\
+\code{vacunaciones.csv} & 6 & 33 & 27 \\
+\code{stock\_farmaceutico.csv} & 6 & 20 & 14 \\
+\hline
+\end{tabular}
+\caption{Comparación entre los datasets provistos y los datasets extendidos usados por el sistema.}
+\end{table}
+
+Además de agregar filas, se incorporaron dos campos al modelo cargado desde CSV. En \code{propietarios.csv} se agregó \code{activo}, necesario para implementar la baja lógica. En \code{consultas.csv} se agregó \code{tipo}, usado para distinguir entre \code{Consulta} y \code{Cirugia}. El dataset original no traía una columna específica para cirugías, pero sí incluía atenciones que podían clasificarse de esa forma, como fractura de pata y extracción dentaria. En los datos extendidos también se agregaron nuevas atenciones de tipo \code{Cirugia}, por ejemplo esterilización, resección de masa, cirugía oftalmológica y reparación de hernia.
+
+El seed también agrega algunas consultas con fechas relativas al mes actual. Esto no reemplaza los CSV extendidos, sino que ayuda a que la vista de ingresos mensuales tenga datos representativos aunque el trabajo se ejecute en otro mes.
+
 \subsection{Modelo en MongoDB}
 
 En MongoDB se guardan las entidades principales del dominio de VetSalud: propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. Cada una se representa como una colección independiente porque tiene identidad propia y puede ser consultada desde distintos puntos del sistema.
@@ -334,6 +361,110 @@ Las colecciones principales son:
 \end{itemize}
 
 La decisión general fue mantener las relaciones mediante referencias por id. Por ejemplo, un paciente referencia a su propietario con \code{id\_propietario}, y una consulta referencia tanto al paciente como al veterinario mediante \code{id\_paciente} e \code{id\_vet}. Esto permite mantener las entidades separadas y evitar duplicar información descriptiva, pero al mismo tiempo deja disponible la posibilidad de cruzarlas mediante \code{\$lookup} cuando una query necesita información combinada.
+
+\begin{figure}[H]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    entity/.style={
+        draw=primary,
+        rounded corners=2mm,
+        fill=primary!6,
+        line width=0.6pt,
+        align=left,
+        inner sep=5pt,
+        minimum width=3.7cm,
+        font=\scriptsize
+    },
+    redisbox/.style={
+        draw=codecomment,
+        dashed,
+        rounded corners=2mm,
+        fill=codebg,
+        line width=0.6pt,
+        align=left,
+        inner sep=5pt,
+        minimum width=4.4cm,
+        font=\scriptsize
+    },
+    rel/.style={-{Stealth[length=2mm]}, line width=0.7pt, color=primary},
+    relredis/.style={-{Stealth[length=2mm]}, dashed, line width=0.7pt, color=codecomment},
+    label/.style={font=\scriptsize, fill=white, inner sep=1pt}
+]
+\node[entity] (propietarios) at (0,3.2) {
+    \textbf{propietarios}\\
+    \texttt{\_id}\\
+    nombre, apellido, dni\\
+    email, telefono\\
+    ciudad, provincia\\
+    activo
+};
+
+\node[entity] (pacientes) at (5.1,3.2) {
+    \textbf{pacientes}\\
+    \texttt{\_id}\\
+    nombre, especie, raza\\
+    fecha\_nac\\
+    id\_propietario\\
+    activo
+};
+
+\node[entity] (consultas) at (10.2,3.2) {
+    \textbf{consultas}\\
+    \texttt{\_id}\\
+    id\_paciente\\
+    id\_vet\\
+    fecha, tipo, estado\\
+    motivo, diagnostico, costo
+};
+
+\node[entity] (productos) at (0,0.0) {
+    \textbf{productos}\\
+    \texttt{\_id}\\
+    nombre, categoria\\
+    precio\_unit\\
+    vencimiento\\
+    proveedor
+};
+
+\node[entity] (vacunaciones) at (5.1,0.0) {
+    \textbf{vacunaciones}\\
+    \texttt{\_id}\\
+    id\_paciente\\
+    id\_vet\\
+    fecha\_aplicacion\\
+    nombre\_vacuna\\
+    proxima\_dosis
+};
+
+\node[entity] (veterinarios) at (10.2,0.0) {
+    \textbf{veterinarios}\\
+    \texttt{\_id}\\
+    nombre, apellido\\
+    matricula\\
+    especialidad\\
+    sucursal, activo
+};
+
+\node[redisbox] (redis) at (5.1,-2.8) {
+    \textbf{Redis}\\
+    \texttt{stock:unidades}\\
+    producto como value\\
+    unidades como score\\[1mm]
+    \texttt{cache:*}\\
+    resultados JSON con TTL
+};
+
+\draw[rel] (pacientes.west) -- node[label, above]{id\_propietario} (propietarios.east);
+\draw[rel] (consultas.west) -- node[label, above]{id\_paciente} (pacientes.east);
+\draw[rel] (consultas.south) -- node[label, right]{id\_vet} (veterinarios.north);
+\draw[rel] (vacunaciones.north) -- node[label, right]{id\_paciente} (pacientes.south);
+\draw[rel] (vacunaciones.east) -- node[label, above]{id\_vet} (veterinarios.west);
+\draw[relredis] (redis.west) -- node[label, below left]{id\_producto} (productos.south);
+\end{tikzpicture}%
+}
+\caption{Resumen UML simplificado del modelo de datos y sus referencias principales.}
+\end{figure}
 
 Los propietarios contienen la información de contacto y ubicación de cada cliente de la clínica. Además, incluyen un campo \code{activo}, utilizado para implementar baja lógica. Esta decisión permite conservar los datos históricos aunque un propietario deje de estar activo.
 
@@ -717,9 +848,9 @@ Esta query justifica mantener las vacunaciones como colección separada de las c
 
 La novena query expone el endpoint \code{GET /api/controles-baratos?max=5000} y lista las consultas de control cuyo costo es menor al umbral indicado. Se resuelve con MongoDB usando las colecciones \code{consultas} y \code{pacientes}.
 
-En los datos cargados, el campo \code{tipo} distingue principalmente entre \code{Consulta} y \code{Cirugia}; no existe un tipo separado llamado \code{Control}. Por eso se interpreta ``control'' a partir del campo \code{motivo}, seleccionando las consultas cuyo motivo comienza con esa palabra. Al mismo tiempo, se mantiene el filtro \code{tipo = Consulta} para excluir cirugías y otras atenciones clínicas que no correspondan al caso pedido.
+Para esta query asumimos que ``control'' es equivalente a una consulta médica no quirúrgica, por lo que cualquier documento con \code{tipo = Consulta} cuenta como control.
 
-El pipeline aplica un \code{\$match} compuesto sobre \code{tipo}, \code{motivo} y \code{costo}. Luego hace un \code{\$lookup} contra \code{pacientes} para mostrar el animal atendido, aplica \code{\$unwind} porque cada consulta tiene un único paciente, ordena por costo ascendente y proyecta los datos principales de la atención.
+El pipeline aplica un \code{\$match} compuesto sobre \code{tipo} y \code{costo}. Luego hace un \code{\$lookup} contra \code{pacientes} para mostrar el animal atendido, aplica \code{\$unwind} porque cada consulta tiene un único paciente, ordena por costo ascendente y proyecta los datos principales de la atención.
 
 \begin{codeblock}[Ejemplo de resultado de Query 9]{json}
 [
