@@ -304,6 +304,14 @@ La arquitectura quedó dividida según el tipo de dato y el tipo de operación. 
 
     \item \textbf{Limitación cross-motor:} MongoDB y Redis no comparten una transacción global. Por eso, en operaciones que involucran ambos motores, como registrar una consulta y descontar stock, existe una posible ventana de inconsistencia. Para reducirla, primero se valida stock en Redis, luego se inserta la consulta en MongoDB y finalmente se descuenta el stock de forma atómica.
 \end{itemize}
+
+\subsection{Conexión desde la aplicación}
+
+Ambos motores se levantan con Docker Compose. El archivo \code{docker-compose.yml} define un contenedor de MongoDB 7 y otro de Redis 7, exponiendo los puertos \code{27017} y \code{6379}. La aplicación Node.js se conecta a esos servicios mediante variables de entorno: \code{MONGO\_URI}, \code{DB\_NAME} y \code{REDIS\_URL}.
+
+La conexión se centraliza en el módulo \code{src/db.js}. Ese módulo expone una función \code{connect()} que inicializa los clientes la primera vez que se la invoca y luego reutiliza las mismas instancias para los siguientes requests. Para MongoDB se usa el cliente oficial \code{mongodb}, y para Redis se usa el cliente oficial \code{redis}.
+
+Esta decisión evita abrir una conexión nueva por cada endpoint ejecutado. No se implementó un pool propio porque el driver de MongoDB ya administra internamente sus conexiones, mientras que Redis opera naturalmente como un servidor single-threaded que procesa comandos de forma secuencial. Para el alcance del trabajo, centralizar la conexión en un único módulo también simplifica el seed, las queries y el cierre ordenado de clientes.
 \section{Modelo de Datos}
 
 El modelo de datos se diseñó pensando en las consultas que debía resolver el sistema. La idea no fue copiar un modelo relacional tradicional dentro de una base NoSQL, sino repartir la información según el tipo de dato y el tipo de operación esperada. MongoDB concentra las entidades clínicas y administrativas, mientras que Redis guarda estructuras específicas para stock y caché.
@@ -452,6 +460,8 @@ Las claves de caché usadas por el sistema son:
 \end{itemize}
 
 Estas claves representan información derivada. Si expiran o se invalidan, el resultado puede recalcularse desde MongoDB. Por eso tienen una semántica distinta a \code{stock:unidades}: el stock representa estado operativo del sistema, mientras que la caché representa resultados temporales.
+
+La separación por prefijos también permite operar sobre la caché sin afectar el stock. Por ejemplo, el endpoint de limpieza de caché elimina claves \code{cache:*}, pero no toca \code{stock:unidades}. Esto es importante porque ambos datos viven en Redis, aunque no tienen la misma responsabilidad dentro del sistema.
 
 \subsection{Relación entre ambos motores}
 
@@ -933,6 +943,12 @@ Cuando hay productos usados, el descuento se delega en la Query 15. De esta form
 
 \subsection{Queries cacheadas}
 
+Las queries cacheadas usan un patrón \textit{cache-aside}. La aplicación primero consulta Redis con una clave determinada. Si el valor existe, lo deserializa desde JSON y devuelve ese resultado. Si no existe, ejecuta la agregación correspondiente en MongoDB, serializa el resultado, lo guarda en Redis con un TTL y finalmente lo devuelve al cliente.
+
+Este patrón se eligió porque MongoDB sigue siendo la fuente de verdad para los datos clínicos y administrativos. Redis solamente acelera lecturas frecuentes del dashboard. En consecuencia, los resultados cacheados son descartables: si una clave expira o se borra, la query vuelve a calcularse contra MongoDB.
+
+Para hacer visible este comportamiento, el servidor agrega el header \code{X-Cache} en las respuestas cacheadas. El valor puede indicar \code{MISS} cuando se recalcula el resultado o \code{HIT} cuando se responde desde Redis. La implementación usa \code{AsyncLocalStorage} para asociar esos eventos de caché al request HTTP actual, evitando usar variables globales compartidas entre requests concurrentes.
+
 \subsubsection{Query 5: Veterinarios activos con consultas en los últimos 60 días}
 
 La quinta query expone el endpoint \code{GET /api/vets-activos-consultas-60d} y lista los veterinarios activos junto con la cantidad de consultas registradas en los últimos 60 días. Se calcula con MongoDB sobre las colecciones \code{veterinarios} y \code{consultas}, y el resultado se guarda temporalmente en Redis como caché.
@@ -1242,9 +1258,39 @@ Esto elimina las claves con prefijo \code{cache:}. No borra el stock ni los dato
 
 \section{Resultados}
 
-\section{Dificultades y Limitaciones}
+El resultado final es una aplicación reproducible que permite levantar MongoDB y Redis con Docker, cargar los datos desde CSV y ejecutar las 15 consultas y servicios pedidos desde una API REST o desde el dashboard web.
+
+La estructura de código quedó organizada por responsabilidad. Las consultas se separaron en módulos individuales dentro de \code{src/queries}, de modo que cada query tiene su propia función documentada. El servidor Express se limita a exponer los endpoints, validar parámetros simples y devolver las respuestas en JSON.
+
+En MongoDB se cargan las colecciones principales del dominio: propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. También se crean índices para acompañar filtros y relaciones frecuentes, y se define la vista de ingresos mensuales usada por la Query 11.
+
+En Redis se carga el \textit{Sorted Set} \code{stock:unidades} para el stock operativo. Además, se usan claves con prefijo \code{cache:} para guardar resultados derivados de forma temporal.
+
+El dashboard permite probar las consultas de lectura, las operaciones de ABM, el alta de consultas y el decremento de stock. Además, muestra cuándo una query cacheada se resolvió desde Redis o cuándo fue recalculada contra MongoDB. Esto ayuda a verificar de forma práctica la separación entre fuente de verdad y caché.
+
+También se validaron casos de escritura relevantes para el dominio: el alta de propietarios no permite duplicar identificadores, la baja se realiza de forma lógica, el alta de consultas valida paciente y veterinario existentes y activos, y el decremento de stock no permite dejar unidades negativas. En las operaciones de stock, Redis ejecuta la validación y el descuento mediante Lua para mantener la atomicidad del contador.
+
+\section{Limitaciones}
+
+La principal limitación técnica es que MongoDB y Redis no comparten una transacción global. El caso más sensible aparece al registrar una consulta que consume productos: el sistema inserta la atención en MongoDB y descuenta unidades en Redis. Para reducir el riesgo de inconsistencias, primero se valida el stock disponible, luego se inserta la consulta y finalmente se descuenta con un script Lua atómico. Aun así, si hubiera una falla justo entre ambos motores, podría existir una inconsistencia temporal.
+
+Una mejora posible para un sistema productivo sería implementar un patrón de \textit{outbox} o una saga. Por ejemplo, se podría insertar en MongoDB la consulta junto con un evento pendiente de descuento, y luego un worker aplicaría el cambio en Redis con reintentos y registro de estado. Para el alcance del TP se priorizó una implementación más directa, pero dejando explícita la limitación de coordinación entre motores.
+
+Otra limitación es que la caché es \textit{best-effort}. Las claves \code{cache:*} tienen TTL corto y se invalidan cuando la aplicación registra una nueva consulta, pero podrían quedar datos levemente desactualizados si alguien modifica MongoDB por fuera de la API. Esto es aceptable para consultas de dashboard, porque no se usa la caché como fuente de verdad ni para decisiones transaccionales.
+
+Redis se usa como almacenamiento operativo del stock. En este setup corre dentro de Docker con la configuración simple del proyecto. Para producción habría que endurecer su persistencia y tolerancia a fallos, por ejemplo configurando AOF o snapshots RDB según la necesidad, replicación, backups y una política clara de recuperación ante caídas.
+
+También se simplificó la seguridad del entorno. MongoDB y Redis se levantan sin autenticación ni TLS para facilitar la corrección y la ejecución local del trabajo. En un ambiente real deberían usarse credenciales, secretos fuera del repositorio, redes internas, firewall y conexiones seguras.
+
+Por último, las fechas relativas dependen de la fecha del sistema. Esto afecta especialmente queries como últimos 60 días, vacunas vencidas, último año e ingresos del mes actual. Para que la Query 11 no quede vacía al ejecutar el TP en distintos meses, el seed agrega algunas consultas del mes corriente. Esta decisión mejora la reproducibilidad de la demo, pero también implica que parte del dataset se calcula al momento de cargar la base.
 
 \section{Conclusiones}
+
+El trabajo permitió aplicar una arquitectura de persistencia políglota con dos motores NoSQL de paradigmas distintos y responsabilidades bien separadas. MongoDB funcionó como base principal del dominio clínico y administrativo, mientras que Redis se usó para stock operativo, decrementos atómicos y caché de consultas frecuentes.
+
+El modelo de datos se diseñó a partir de las consultas pedidas. Las entidades principales se mantuvieron como colecciones independientes y relacionadas por identificadores, lo que permitió resolver los cruces necesarios con pipelines de agregación. Redis, en cambio, se utilizó solamente donde aportaba una ventaja concreta: ordenar y filtrar stock por cantidad, descontar unidades de forma atómica y acelerar lecturas repetidas.
+
+La solución final cumple con las 15 consultas y servicios de la consigna, mantiene el código organizado en módulos separados y deja documentadas las decisiones de diseño principales. Si bien existen limitaciones propias de coordinar dos motores sin transacción global, la implementación resulta adecuada para el alcance del TP: es simple de levantar, reproducible, fácil de probar y coherente con el uso de MongoDB y Redis dentro del sistema VetSalud.
 
 % =========================================================
 % REFERENCIAS
