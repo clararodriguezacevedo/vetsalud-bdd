@@ -2,7 +2,8 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import 'dotenv/config';
-import * as q from './queries.js';
+import { cacheCtx, flushCache } from './queries/cache.js';
+import * as q from './queries/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -10,10 +11,10 @@ app.use(express.json());
 app.use(express.static(join(__dirname, '..', 'public')));
 
 const wrap = (fn) => async (req, res) => {
-  await q.cacheCtx.run({ events: [] }, async () => {
+  await cacheCtx.run({ events: [] }, async () => {
     try {
       const result = await fn(req);
-      const { events } = q.cacheCtx.getStore();
+      const { events } = cacheCtx.getStore();
       if (events.length) {
         res.set('X-Cache', events.map((e) => `${e.status} ${e.key} ttl=${e.ttl}`).join(', '));
         res.set('Access-Control-Expose-Headers', 'X-Cache');
@@ -54,7 +55,7 @@ app.delete('/api/propietarios/:id',              wrap((req) => q.bajaPropietario
 app.post('/api/consultas',                       wrap((req) => q.altaConsulta(req.body)));
 app.post('/api/decrementar-stock',               wrap((req) => q.decrementarStock(req.body.id_producto, Number(req.body.cantidad))));
 
-app.post('/api/cache/flush',                     wrap(()    => q.flushCache()));
+app.post('/api/cache/flush',                     wrap(()    => flushCache()));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`API escuchando en http://localhost:${PORT}`));

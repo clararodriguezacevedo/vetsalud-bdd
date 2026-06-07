@@ -33,7 +33,10 @@ vetsalud/
 └── src/
     ├── db.js               # Conexión a Mongo y Redis
     ├── seed.js             # Carga CSV → Mongo + Redis
-    ├── queries.js          # Las 15 consultas + caché helpers
+    ├── queries/            # Una consulta por módulo
+    │   ├── index.js        # Exporta las 15 consultas
+    │   ├── cache.js        # Helpers de caché en Redis
+    │   └── q01-...q15.js   # Implementación documentada de cada query
     └── server.js           # API Express
 ```
 
