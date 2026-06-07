@@ -415,6 +415,8 @@ Por último, la colección \code{productos} guarda el catálogo farmacéutico. E
 
 Además de las colecciones, se definieron índices sobre campos usados frecuentemente en filtros, relaciones o rangos. El seed crea índices sobre \code{fecha} e \code{id\_vet} en \code{consultas}, sobre \code{id\_propietario} en \code{pacientes}, y sobre \code{proveedor} y \code{vencimiento} en \code{productos}. Estos índices acompañan las consultas implementadas y evitan depender únicamente de recorridos completos sobre las colecciones.
 
+También se define una vista formal para la Query 11: \code{vista\_ingresos\_vet\_mes}. Esta vista usa un pipeline de agregación sobre consultas, cruza con veterinarios y expone los ingresos del mes actual agrupados por profesional.
+
 \subsection{Modelo en Redis}
 
 Redis se usa con un modelo más acotado que MongoDB. No se intentó replicar las entidades clínicas ni duplicar el dominio completo, sino guardar únicamente estructuras donde Redis aporta una ventaja clara: unidades disponibles del stock farmacéutico y caché de consultas pesadas.
@@ -725,7 +727,139 @@ El pipeline aplica un \code{\$match} compuesto sobre \code{tipo}, \code{motivo} 
 ]
 \end{codeblock}
 
+\subsubsection{Query 10: Pacientes de una sucursal determinada}
+
+La décima query expone el endpoint de pacientes por sucursal y lista los pacientes asociados a una sucursal determinada. Se resuelve con MongoDB usando las colecciones de \code{veterinarios}, \code{consultas}, \code{vacunaciones} y \code{pacientes}.
+
+La sucursal no está guardada en el documento del paciente, sino en el veterinario. Por eso el pipeline comienza desde \code{veterinarios} y filtra por el nombre de sucursal recibido como parámetro. A partir de esos veterinarios, la query busca pacientes atendidos tanto en \code{consultas} como en \code{vacunaciones}.
+
+Después de traer ambos conjuntos, se usa \code{\$setUnion} para unir los identificadores de pacientes sin duplicados. Luego se desarma el arreglo, se agrupa nuevamente por paciente para deduplicar entre distintos veterinarios de la misma sucursal y se hace un \code{\$lookup} final contra \code{pacientes} para devolver el documento completo del animal.
+
+\begin{codeblock}[Fragmento de resultado de Query 10 para Palermo]{json}
+[
+  {
+    "_id": "P001",
+    "nombre": "Firulais",
+    "especie": "Perro",
+    "raza": "Labrador",
+    "fecha_nac": "2019-04-12T00:00:00.000Z",
+    "id_propietario": "C001",
+    "activo": true
+  },
+  {
+    "_id": "P002",
+    "nombre": "Michi",
+    "especie": "Gato",
+    "raza": "Siames",
+    "fecha_nac": "2021-07-03T00:00:00.000Z",
+    "id_propietario": "C002",
+    "activo": true
+  }
+]
+\end{codeblock}
+
+\subsubsection{Query 12: Propietarios a revisar}
+
+La duodécima query expone el endpoint \code{GET /api/propietarios-inactivos}. Para esta consulta, consideramos que el listado de propietarios inactivos como aquellos propietarios dados de baja, propietarios sin mascotas registradas y propietarios activos con mascotas pero sin consultas recientes.
+
+La función calcula el límite temporal a partir de la fecha del sistema, tomando el inicio del día ubicado un año atrás. Luego parte de \code{propietarios}, une cada dueño con sus pacientes mediante \code{\$lookup} y, con esos identificadores de pacientes, busca consultas cuya fecha sea mayor o igual a ese límite.
+
+Después agrega la cantidad de mascotas y la cantidad de consultas recientes. La condición final conserva propietarios que cumplan al menos una de las tres condiciones definidas. Esta interpretación permite detectar dueños sin actividad vigente desde distintas causas: baja administrativa, ausencia de mascotas o falta de consultas durante el período analizado.
+
+Para que el resultado sea fácil de leer, la query asigna una \code{categoria} con \code{\$switch}. La categoría \code{Dado de baja} tiene prioridad sobre las demás; luego aparece \code{Sin mascotas}; y, como caso restante, \code{Sin consultas en el último año}. Ese mismo criterio se usa para ordenar el resultado. La consulta considera consultas, no vacunaciones, porque el enunciado pide específicamente consultas registradas.
+
+\begin{codeblock}[Fragmento de resultado de Query 12]{json}
+[
+  {
+    "_id": "C010",
+    "nombre": "Martin",
+    "apellido": "Acosta",
+    "email": "martin@gmail.com",
+    "ciudad": "Bahia Blanca",
+    "provincia": "Buenos Aires",
+    "activo": false,
+    "cantidad_mascotas": 1,
+    "cantidad_consultas_recientes": 1,
+    "categoria": "Dado de baja"
+  },
+  {
+    "_id": "C009",
+    "nombre": "Sofia",
+    "apellido": "Mendez",
+    "email": "sofi@gmail.com",
+    "ciudad": "San Miguel de Tucuman",
+    "provincia": "Tucuman",
+    "activo": true,
+    "cantidad_mascotas": 0,
+    "cantidad_consultas_recientes": 0,
+    "categoria": "Sin mascotas"
+  },
+  {
+    "_id": "C008",
+    "nombre": "Federico",
+    "apellido": "Russo",
+    "email": "fede@gmail.com",
+    "ciudad": "Mar del Plata",
+    "provincia": "Buenos Aires",
+    "activo": true,
+    "cantidad_mascotas": 1,
+    "cantidad_consultas_recientes": 0,
+    "categoria": "Sin consultas en el ultimo anio"
+  }
+]
+\end{codeblock}
+
+\subsubsection{Query 13: ABM de propietarios}
+
+La decimotercera query implementa el ABM completo de propietarios. Se resuelve sobre MongoDB usando la colección \code{propietarios} y expone tres endpoints:
+
+\begin{itemize}
+    \item \code{POST /api/propietarios}
+    \item \code{PUT /api/propietarios/:id}
+    \item \code{DELETE /api/propietarios/:id}
+\end{itemize}
+
+El alta valida que el documento recibido tenga \code{\_id} y que no exista otro propietario con ese mismo identificador. Si la validación pasa, inserta el documento recibido en \code{propietarios}. El campo \code{activo} queda con valor \code{true} por defecto si no viene informado, pero se respeta el valor enviado en el alta.
+
+La modificación toma el identificador desde la URL y aplica un \code{\$set} únicamente con los campos enviados por el cliente. Antes de actualizar, se elimina \code{\_id} del payload para impedir que una modificación cambie la clave primaria del documento. Si no existe un propietario con ese identificador, la función devuelve un error.
+
+La baja se implementa como baja lógica. En lugar de borrar físicamente el documento, actualiza \code{activo} a \code{false}. Esto permite conservar trazabilidad y evita dejar referencias huérfanas desde pacientes, consultas o historiales que ya estaban asociados a ese propietario.
+
+\begin{codeblock}[Ejemplos de respuesta de Query 13]{json}
+{
+  "alta": {
+    "ok": true,
+    "_id": "C999"
+  },
+  "modificacion": {
+    "ok": true,
+    "modificados": 1
+  },
+  "baja_logica": {
+    "ok": true,
+    "baja_logica": "C999"
+  }
+}
+\end{codeblock}
+
 \subsection{Queries resueltas con Redis}
+
+\subsubsection{Query 15: Decremento de stock tras una consulta}
+
+La decimoquinta query expone el endpoint \code{POST /api/decrementar-stock} y descuenta unidades de un producto del stock farmacéutico. Se resuelve íntegramente en Redis usando la clave \code{stock:unidades}.
+
+El stock está modelado como un \textit{Sorted Set}: cada producto es un miembro del conjunto y la cantidad disponible se guarda como score. La función recibe \code{id\_producto} y \code{cantidad}; antes de ejecutar el descuento valida que el producto esté informado y que la cantidad sea un entero positivo.
+
+El decremento se realiza mediante un script Lua ejecutado con \code{redis.eval}. Dentro de ese script Redis verifica que el producto exista, valida que el stock actual alcance para cubrir la cantidad solicitada y descuenta las unidades con \code{ZINCRBY}. Como el script se ejecuta de forma atómica, dos requests concurrentes no pueden validar ambos contra el mismo stock inicial y dejar unidades negativas.
+
+El script devuelve códigos simples: \code{-1} si el producto no existe, \code{-2} si el stock es insuficiente, y el nuevo valor de unidades cuando el descuento se realiza correctamente. La función traduce esos códigos a errores de negocio o a una respuesta con las unidades restantes.
+
+\begin{codeblock}[Ejemplo de resultado de Query 15]{json}
+{
+  "id_producto": "PRD004",
+  "unidades": 38
+}
+\end{codeblock}
 
 \subsection{Queries que combinan MongoDB y Redis}
 
@@ -760,6 +894,41 @@ Esta query justifica la separación entre catálogo y stock operativo. MongoDB n
     "unidades": 20
   }
 ]
+\end{codeblock}
+
+\subsubsection{Query 14: Registro de nueva consulta médica}
+
+La decimocuarta query expone el endpoint \code{POST /api/consultas} y registra una nueva atención médica. Se apoya principalmente en MongoDB, usando las colecciones \code{pacientes}, \code{veterinarios} y \code{consultas}, pero también puede interactuar con Redis si la consulta informa productos consumidos.
+
+Antes de insertar la consulta, la función valida que el paciente exista y esté activo. También valida que el veterinario exista y esté activo. Estas validaciones son necesarias porque \code{consultas} guarda referencias por identificador; insertar una atención con un paciente o veterinario inexistente rompería la integridad referencial del modelo.
+
+Si el request incluye \code{productos\_usados}, la función consolida productos repetidos y valida que cada cantidad sea un entero positivo. Luego consulta Redis para comprobar que cada producto exista en \code{stock:unidades} y que haya unidades suficientes. La consolidación evita validar dos líneas del mismo producto como si fueran consumos independientes contra el mismo stock inicial.
+
+Para el documento de la consulta, si el cliente no envía \code{\_id}, la función genera el siguiente identificador con prefijo \code{CON}. Luego inserta la atención en MongoDB con fecha, tipo, motivo, diagnóstico, costo y estado. Una vez registrada la consulta, invalida las claves de caché que dependen de la colección \code{consultas}: \code{cache:top-diagnosticos}, \code{cache:ingresos-vet-mes} y \code{cache:vets-consultas-60d}.
+
+Cuando hay productos usados, el descuento se delega en la Query 15. De esta forma, la validación de stock y el decremento final usan la misma estructura de Redis y el descuento efectivo se realiza con el script Lua atómico. 
+
+\begin{codeblock}[Ejemplo de resultado de Query 14]{json}
+{
+  "ok": true,
+  "consulta": {
+    "_id": "CON999",
+    "id_paciente": "P001",
+    "id_vet": "V001",
+    "fecha": "2026-06-06T00:00:00.000Z",
+    "tipo": "Consulta",
+    "motivo": "Control de rutina",
+    "diagnostico": "Sano",
+    "costo": 4500,
+    "estado": "Cerrada"
+  },
+  "stock": [
+    {
+      "id_producto": "PRD001",
+      "unidades": 118
+    }
+  ]
+}
 \end{codeblock}
 
 \subsection{Queries cacheadas}
@@ -826,7 +995,250 @@ Como es una agregación que puede consultarse muchas veces desde el dashboard y 
 ]
 \end{codeblock}
 
+\subsubsection{Query 11: Ingresos por veterinario en el mes actual}
+
+La undécima query expone el endpoint \code{GET /api/ingresos-vet-mes}. Su resultado se obtiene leyendo una vista formal de MongoDB.
+
+La vista se llama \code{vista\_ingresos\_vet\_mes}. Se define sobre la colección \code{consultas} y usa un pipeline de agregación para resumir las atenciones por veterinario.
+
+El pipeline de la vista calcula el rango del mes actual dentro de MongoDB usando la variable \code{\$\$NOW}. A partir de ese valor, filtra las consultas cuya fecha pertenece al mes en curso, agrupa por veterinario, suma el campo \code{costo} como ingresos y cuenta cuántas atenciones componen ese total.
+
+Luego, la vista cruza el resultado con \code{veterinarios} para incorporar el nombre completo del profesional y su sucursal. La salida queda compuesta por el identificador del veterinario, el nombre del veterinario, la sucursal, el total de ingresos y la cantidad de atenciones. El resultado se ordena por ingresos descendentes.
+
+Esta vista aprovecha que consultas y cirugías comparten la colección \code{consultas}: ambas representan atenciones clínicas con costo y participan del cálculo de ingresos. Para que la consulta tenga datos representativos independientemente del mes en que se ejecute el seed, se agregan algunas consultas con fechas relativas al mes actual. Además, el endpoint guarda en Redis durante 60 segundos el resultado de leer la vista, porque las vistas estándar de MongoDB se calculan al consultarse y no almacenan el resultado materializado.
+
+\begin{codeblock}[Ejemplo de resultado de Query 11]{json}
+[
+  {
+    "ingresos": 25000,
+    "cantidad": 1,
+    "id_vet": "V006",
+    "veterinario": "Mateo Bianchi",
+    "sucursal": "Recoleta"
+  }
+]
+\end{codeblock}
+
 \section{Manual de Usuario}
+
+Esta sección explica cómo levantar y usar el sistema desde cero. La idea es que alguien que clone el repositorio pueda cargar las bases, abrir la interfaz, ejecutar las consultas y probar las operaciones de escritura sin tener que leer el código primero.
+
+\subsection{Requisitos previos}
+
+Para correr el proyecto localmente se necesita tener instalados Docker, Docker Compose, Node.js y npm. En nuestro caso usamos Docker para levantar MongoDB y Redis, y Node.js para ejecutar el seed y la API Express.
+
+Antes de empezar conviene revisar que estén libres los siguientes puertos:
+
+\begin{itemize}
+    \item \code{27017}, usado por MongoDB.
+    \item \code{6379}, usado por Redis.
+    \item \code{3000}, usado por la API y el dashboard web.
+\end{itemize}
+
+Si alguno de esos puertos ya está ocupado, el contenedor o el servidor pueden fallar al iniciar. En ese caso hay que detener el proceso que lo está usando o cambiar la configuración correspondiente.
+
+\subsection{Primera ejecución}
+
+Los comandos se ejecutan desde la carpeta raíz del proyecto. En este caso, esa carpeta es vetsalud-bdd. El orden recomendado es el siguiente:
+
+\begin{codeblock}[Levantar el proyecto]{bash}
+docker compose up -d
+cp .env.example .env
+npm install
+npm run seed
+npm start
+\end{codeblock}
+
+El primer comando levanta los contenedores de MongoDB y Redis. El archivo \code{.env} define las URLs de conexión y el nombre de la base de datos. El comando \code{npm install} instala las dependencias de Node.js, \code{npm run seed} carga los datos iniciales y \code{npm start} deja la API escuchando en \code{http://localhost:3000}.
+
+Cuando el servidor queda iniciado, en la terminal debería aparecer un mensaje similar a:
+
+\begin{codeblock}[Servidor iniciado]{bash}
+API escuchando en http://localhost:3000
+\end{codeblock}
+
+\subsection{Carga inicial de datos}
+
+El seed toma los archivos CSV de la carpeta \code{data} y carga la información en MongoDB y Redis. En MongoDB se cargan propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. En Redis se carga el stock de productos dentro de la clave \code{stock:unidades}.
+
+También se crean índices en MongoDB y se recrea la vista de ingresos usada por la Query 11. Además, el seed agrega algunas consultas con fechas relativas al mes actual para que la vista de ingresos mensuales tenga datos aunque el proyecto se ejecute en otro momento.
+
+Es importante tener presente que \code{npm run seed} reinicia los datos de trabajo. Esto es útil para volver a un estado conocido después de probar altas, bajas o descuentos de stock. Por ejemplo, si durante una demo se descuentan unidades o se agrega un propietario de prueba, al correr nuevamente el seed se vuelve al estado inicial del dataset.
+
+\subsection{Uso del dashboard}
+
+El sistema incluye una interfaz web simple en \code{http://localhost:3000}. Sirve para probar de forma cómoda las 15 consultas y servicios pedidos.
+
+La pantalla tiene dos pestañas principales:
+
+\begin{itemize}
+    \item \textbf{Dashboard:} agrupa las acciones por tema. Hay bloques para pacientes y propietarios, atenciones, reportes y stock.
+    \item \textbf{Queries:} muestra las consultas de forma más directa, con el endpoint que se está ejecutando y, cuando corresponde, los parámetros o el cuerpo JSON.
+\end{itemize}
+
+Cada vez que se ejecuta una acción, el resultado aparece en el panel inferior. Por defecto se muestra como tabla cuando el formato lo permite. Si se quiere ver la respuesta cruda, se puede usar el botón \code{Ver JSON}. Esto ayuda bastante cuando una respuesta tiene objetos anidados, por ejemplo propietarios con pacientes, historiales clínicos o consultas con productos usados.
+
+En las queries cacheadas, la interfaz muestra una etiqueta de caché cuando la respuesta incluye el header \code{X-Cache}. Si aparece \code{MISS}, significa que el resultado se calculó y luego se guardó en Redis. Si aparece \code{HIT}, significa que se devolvió desde la caché. Las queries donde esto se ve especialmente son Q5, Q7 y Q11.
+
+\subsection{Consultas disponibles desde la interfaz}
+
+Las consultas de lectura se pueden ejecutar desde el dashboard sin escribir comandos. Algunas usan valores fijos por defecto para que sea fácil probarlas apenas se carga el seed.
+
+\begin{itemize}
+    \item \textbf{Q1: Pacientes activos.} Lista pacientes activos con los datos de su propietario.
+    \item \textbf{Q2: Consultas en seguimiento.} Muestra atenciones cuyo estado es \code{Seguimiento}.
+    \item \textbf{Q3: Historial de paciente.} Requiere un id de paciente, por ejemplo \code{P001}.
+    \item \textbf{Q4: Propietarios con múltiples pacientes.} Lista dueños con más de una mascota registrada.
+    \item \textbf{Q5: Veterinarios activos con consultas en 60 días.} Devuelve la cantidad de consultas recientes por veterinario activo.
+    \item \textbf{Q6: Vacunas vencidas.} Lista pacientes cuya próxima dosis es anterior al día actual.
+    \item \textbf{Q7: Top diagnósticos.} Muestra los cinco diagnósticos más frecuentes.
+    \item \textbf{Q8: Stock bajo.} Permite indicar un umbral; por defecto se usa \code{50}.
+    \item \textbf{Q9: Controles económicos.} Permite indicar un costo máximo; por defecto se usa \code{5000}.
+    \item \textbf{Q10: Pacientes por sucursal.} Permite elegir una sucursal, por ejemplo \code{Palermo}.
+    \item \textbf{Q11: Ingresos por veterinario.} Lee la vista agregada del mes actual.
+    \item \textbf{Q12: Propietarios a revisar.} Clasifica propietarios dados de baja, sin mascotas o sin consultas recientes.
+\end{itemize}
+
+\subsection{ABM de propietarios}
+
+La Query 13 implementa alta, modificación y baja lógica de propietarios. Desde el dashboard se encuentra en la sección de pacientes y propietarios, con tres subpestañas: \textit{Alta}, \textit{Modificar} y \textit{Baja}.
+
+Para dar de alta un propietario se debe indicar al menos un \code{\_id}. El sistema valida que no exista otro propietario con el mismo identificador. Si no se informa \code{activo}, se toma \code{true} como valor por defecto; si se envía el campo, se respeta el valor recibido.
+
+Un ejemplo de alta desde la API sería:
+
+\begin{codeblock}[Alta de propietario]{bash}
+curl -X POST http://localhost:3000/api/propietarios \
+  -H "Content-Type: application/json" \
+  -d '{
+    "_id": "C100",
+    "nombre": "Lucia",
+    "apellido": "Vega",
+    "dni": "40111222",
+    "email": "lu@mail.com",
+    "telefono": "1144222333",
+    "ciudad": "CABA",
+    "provincia": "Buenos Aires"
+  }'
+\end{codeblock}
+
+Para modificar un propietario se usa el identificador en la URL y se envían solamente los campos que se quieren cambiar. El sistema ignora un eventual \code{\_id} dentro del body para evitar que se cambie la clave primaria.
+
+\begin{codeblock}[Modificación de propietario]{bash}
+curl -X PUT http://localhost:3000/api/propietarios/C100 \
+  -H "Content-Type: application/json" \
+  -d '{ "ciudad": "Rosario" }'
+\end{codeblock}
+
+La baja se hace de forma lógica. Esto conserva el historial y evita perder referencias desde pacientes o consultas.
+
+\begin{codeblock}[Baja lógica de propietario]{bash}
+curl -X DELETE http://localhost:3000/api/propietarios/C100
+\end{codeblock}
+
+\subsection{Registro de consultas}
+
+La Query 14 registra una nueva consulta médica. Desde el dashboard se encuentra en el bloque \textit{Registrar consulta}. Para cargar una atención se debe indicar un paciente y un veterinario existentes. Además, ambos deben estar activos.
+
+Los campos principales son:
+
+\begin{itemize}
+    \item \code{id\_paciente}: identificador del paciente atendido.
+    \item \code{id\_vet}: identificador del veterinario que atiende.
+    \item \code{tipo}: puede ser \code{Consulta} o \code{Cirugia}.
+    \item \code{motivo}: motivo de la atención.
+    \item \code{diagnostico}: diagnóstico registrado.
+    \item \code{costo}: importe de la atención.
+    \item \code{estado}: por ejemplo \code{Cerrada} o \code{Seguimiento}.
+    \item \code{productos\_usados}: lista opcional de productos consumidos.
+\end{itemize}
+
+Si se cargan productos usados, el sistema valida el stock disponible en Redis. La cantidad debe ser positiva y entera. Si el stock alcanza, la consulta se inserta en MongoDB y luego se descuenta el stock usando la lógica atómica de la Query 15.
+
+Ejemplo de alta de consulta con consumo de stock:
+
+\begin{codeblock}[Alta de consulta]{bash}
+curl -X POST http://localhost:3000/api/consultas \
+  -H "Content-Type: application/json" \
+  -d '{
+    "id_paciente": "P002",
+    "id_vet": "V003",
+    "tipo": "Consulta",
+    "motivo": "Control",
+    "diagnostico": "Sano",
+    "costo": 3000,
+    "estado": "Cerrada",
+    "productos_usados": [
+      { "id_producto": "PRD001", "cantidad": 2 }
+    ]
+  }'
+\end{codeblock}
+
+Después de registrar una consulta se invalidan las cachés que dependen de atenciones: diagnósticos frecuentes, ingresos por veterinario del mes y consultas recientes por veterinario. Por eso, si se ejecuta alguna de esas queries después de cargar una consulta, el primer pedido vuelve a recalcular el resultado.
+
+\subsection{Manejo de stock}
+
+El stock operativo se administra en Redis. Para ver productos con pocas unidades se usa Q8, que consulta el \textit{Sorted Set} \code{stock:unidades} y luego completa los datos descriptivos desde MongoDB.
+
+Para descontar stock directamente se usa Q15. Desde el dashboard alcanza con indicar el id del producto y la cantidad. Desde la API se puede probar así:
+
+\begin{codeblock}[Decremento de stock]{bash}
+curl -X POST http://localhost:3000/api/decrementar-stock \
+  -H "Content-Type: application/json" \
+  -d '{ "id_producto": "PRD001", "cantidad": 3 }'
+\end{codeblock}
+
+Si el producto no existe o si no hay unidades suficientes, la API responde con un error. La operación de descuento se ejecuta con Lua dentro de Redis, de modo que la validación y el decremento ocurren en una única operación atómica.
+
+\subsection{Uso directo de la API}
+
+Todos los servicios también pueden usarse directamente por HTTP. Los endpoints principales son:
+
+\begin{itemize}
+    \item \code{GET /api/pacientes-activos}
+    \item \code{GET /api/consultas-seguimiento}
+    \item \code{GET /api/historial-paciente/:id}
+    \item \code{GET /api/propietarios-multiples-pacientes}
+    \item \code{GET /api/vets-activos-consultas-60d}
+    \item \code{GET /api/pacientes-vacunas-vencidas}
+    \item \code{GET /api/top-diagnosticos}
+    \item \code{GET /api/stock-bajo?umbral=50}
+    \item \code{GET /api/controles-baratos?max=5000}
+    \item \code{GET /api/pacientes-sucursal?sucursal=Palermo}
+    \item \code{GET /api/ingresos-vet-mes}
+    \item \code{GET /api/propietarios-inactivos}
+    \item \code{POST /api/propietarios}
+    \item \code{PUT /api/propietarios/:id}
+    \item \code{DELETE /api/propietarios/:id}
+    \item \code{POST /api/consultas}
+    \item \code{POST /api/decrementar-stock}
+\end{itemize}
+
+La API devuelve JSON tanto en respuestas correctas como en errores. Cuando hay un error de validación, la respuesta tiene la forma:
+
+\begin{codeblock}[Formato de error]{json}
+{
+  "error": "Mensaje descriptivo del problema"
+}
+\end{codeblock}
+
+\subsection{Caché}
+
+Redis también se usa como caché de algunas consultas de lectura. Esto se puede ver especialmente en:
+
+\begin{itemize}
+    \item Q5, veterinarios activos con consultas en los últimos 60 días.
+    \item Q7, top 5 diagnósticos.
+    \item Q11, ingresos por veterinario en el mes actual.
+\end{itemize}
+
+Si se quiere limpiar manualmente la caché durante una prueba, se puede usar:
+
+\begin{codeblock}[Limpiar caché]{bash}
+curl -X POST http://localhost:3000/api/cache/flush
+\end{codeblock}
+
+Esto elimina las claves con prefijo \code{cache:}. No borra el stock ni los datos principales de MongoDB.
 
 \section{Resultados}
 

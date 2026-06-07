@@ -3,6 +3,7 @@ import { parse } from 'csv-parse/sync';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { connect, close } from './db.js';
+import { INGRESOS_VET_MES_VIEW, recrearVistaIngresosVetMes } from './queries/q11-ingresos-vet-mes.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, '..', 'data');
@@ -128,6 +129,8 @@ async function main() {
   await db.collection('pacientes').createIndex({ id_propietario: 1 });
   await db.collection('productos').createIndex({ proveedor: 1 });
   await db.collection('productos').createIndex({ vencimiento: 1 });
+  await recrearVistaIngresosVetMes(db);
+  console.log(`Mongo view ${INGRESOS_VET_MES_VIEW}: creada`);
 
   const viejas = await redis.keys('producto:*');
   if (viejas.length) await redis.del(viejas);

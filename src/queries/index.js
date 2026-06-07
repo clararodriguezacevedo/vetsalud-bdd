@@ -7,3 +7,9 @@ export { pacientesConVacunasVencidas } from './q06-pacientes-vacunas-vencidas.js
 export { topDiagnosticos } from './q07-top-diagnosticos.js';
 export { stockBajo } from './q08-stock-bajo.js';
 export { controlesBaratos } from './q09-controles-baratos.js';
+export { pacientesPorSucursal } from './q10-pacientes-por-sucursal.js';
+export { ingresosPorVetMesActual } from './q11-ingresos-vet-mes.js';
+export { propietariosSinConsultasUltimoAnio } from './q12-propietarios-sin-consultas-ultimo-anio.js';
+export { altaPropietario, modificarPropietario, bajaPropietario } from './q13-abm-propietarios.js';
+export { altaConsulta } from './q14-alta-consulta.js';
+export { decrementarStock } from './q15-decrementar-stock.js';
