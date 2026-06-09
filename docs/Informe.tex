@@ -220,9 +220,9 @@
         \large
         \textbf{Integrantes:}
         \begin{itemize}
-            \item Rodriguez Acevedo, Clara - 66527
             \item Buela, Mateo - 64680
             \item Medina, Sol - 63577
+            \item Rodriguez Acevedo, Clara - 66527
         \end{itemize}
     \end{flushleft}
 
@@ -249,13 +249,9 @@
 
 \section{Introducción}
 
-VetSalud es una red ficticia de clínicas veterinarias en Argentina. Este trabajo busca montar un sistema sobre una arquitectura de persistencia políglota con dos motores NoSQL. El sistema gestiona propietarios, sus mascotas o pacientes, veterinarios, consultas y cirugías, vacunaciones, y el stock farmacéutico. Las bases corren en contenedores Docker, y construimos una API REST en Node con Express junto con un dashboard web para ejecutar y visualizar las consultas.
+VetSalud es una red ficticia de clínicas veterinarias en Argentina. Este trabajo monta un sistema de gestión sobre una arquitectura de persistencia políglota con dos motores NoSQL. El sistema administra propietarios, sus mascotas o pacientes, veterinarios, consultas y cirugías, vacunaciones, y el stock farmacéutico. Las bases corren en contenedores Docker, y sobre ellas construimos una API REST en Node con Express junto con un dashboard web para ejecutar y visualizar las consultas.
 
-La elección de los dos motores respondió al perfil de los datos. Todo lo clínico y administrativo, es decir propietarios, pacientes, veterinarios, consultas, vacunaciones y catálogo de productos, vive en \textbf{MongoDB}. Son datos con esquemas que podrían cambiar con el tiempo y queríamos evitar que migrar fuera dificultoso. Hoy un paciente tiene nombre, especie y raza; mañana podríamos sumar peso, alergias o antecedentes médicos. En MongoDB realizamos consultas analíticas que cruzan entidades, filtran por fecha y agrupan por categoría, usando pipelines del Aggregation Framework con etapas como \code{\$match}, \code{\$lookup}, \code{\$group} y \code{\$project}.
-
-Por otra parte, utilizamos \textbf{Redis} para administrar las unidades disponibles del stock farmacéutico. Las unidades de cada producto cambian con cada consulta que consume stock, por lo que necesitábamos operaciones rápidas y atómicas sobre ese contador: leer cuántas unidades hay de un producto, listar productos con poco stock y descontar unidades reduciendo el riesgo de que dos consultas concurrentes dejen el contador en negativo. Redis también cumple un rol de caché de resultados de queries pesadas. Algunas consultas del dashboard agregan sobre toda la colección de consultas y pueden leerse seguido; cachearlas en Redis con TTL corto evita ejecutar la misma agregación todo el tiempo.
-
-El objetivo del trabajo no fue solamente implementar las consultas pedidas, sino también justificar cómo se distribuyen las responsabilidades entre ambos motores y qué ventajas aporta cada uno dentro del sistema. MongoDB concentra el dominio persistente y estructurado de la clínica, mientras que Redis se reserva para información de acceso rápido, contadores y resultados derivados.
+Más allá de implementar las consultas, el foco del trabajo está en justificar cómo se reparten las responsabilidades entre ambos motores y qué aporta cada uno. MongoDB concentra el dominio persistente y estructurado de la clínica, mientras que Redis queda reservado para información de acceso rápido, contadores y resultados derivados. Las próximas secciones desarrollan esas decisiones, el modelo de datos que surge de ellas y la implementación de cada una de las quince consultas.
 
 \section{Decisiones de Bases de Datos}
 
@@ -264,31 +260,31 @@ El objetivo del trabajo no fue solamente implementar las consultas pedidas, sino
 Elegimos MongoDB como base principal del dominio clínico y administrativo del sistema. La decisión se apoyó en las características del dominio y en el tipo de consultas que debíamos resolver.
 
 \begin{itemize}
-    \item \textbf{Flexibilidad de esquema:} el dominio veterinario puede cambiar con el tiempo. Hoy un paciente tiene nombre, especie, raza y fecha de nacimiento; en una versión futura podría incorporar peso, alergias, antecedentes o alertas médicas. MongoDB permite agregar estos campos sin rediseñar todo el esquema.
+    \item \textbf{Flexibilidad de esquema.} El dominio veterinario puede cambiar con el tiempo, y MongoDB permite agregar campos nuevos sin rediseñar todo el esquema.
 
-    \item \textbf{Datos con estructura de documento:} las entidades principales del sistema tienen varios atributos propios y se representan naturalmente como documentos. Propietarios, pacientes, veterinarios, consultas, vacunaciones y productos no son simples pares clave-valor, sino registros con estructura rica.
+    \item \textbf{Datos con estructura de documento.} Las entidades principales del sistema tienen varios atributos propios y se representan naturalmente como documentos. Propietarios, pacientes, veterinarios, consultas, vacunaciones y productos son registros con estructuras complejas.
 
-    \item \textbf{Consultas analíticas sobre el dominio:} muchas queries requieren filtrar, cruzar entidades, agrupar y proyectar resultados. Para esto usamos pipelines del Aggregation Framework con etapas como \code{\$match}, \code{\$lookup}, \code{\$group}, \code{\$project} y \code{\$sort}.
+    \item \textbf{Consultas analíticas sobre el dominio.} Muchas queries requieren filtrar, cruzar entidades, agrupar y proyectar resultados, por lo que utilizamos el Aggregation Framework.
 
-    \item \textbf{Atomicidad por documento:} las operaciones principales del sistema afectan un documento central por vez, como el alta de un propietario, la modificación de sus datos, la baja lógica de un propietario o la inserción de una consulta. MongoDB garantiza atomicidad sobre cada documento, lo cual alcanza para la mayoría de las operaciones del dominio clínico.
+    \item \textbf{Atomicidad por documento.} Las operaciones principales del sistema afectan un documento central por vez, como el alta de un propietario, la modificación de sus datos, la baja lógica de un propietario o la inserción de una consulta. MongoDB garantiza atomicidad sobre cada documento, lo cual alcanza para la mayoría de las operaciones del dominio clínico.
 
-    \item \textbf{Consistencia para datos clínicos y administrativos:} en un backoffice clínico es importante no perder ni duplicar registros. Por eso usamos MongoDB como fuente principal del dominio persistente y centralizamos allí las escrituras de propietarios, pacientes, veterinarios, consultas, vacunaciones y productos.
+    \item \textbf{Consistencia para datos clínicos y administrativos.} Nuestra prioridad era no perder ni duplicar registros. Por eso usamos MongoDB como fuente principal del dominio persistente y centralizamos allí las escrituras.
 \end{itemize}
 
 \subsection{Elección de Redis}
 
-Elegimos Redis para resolver las partes del sistema que necesitaban acceso rápido, operaciones atómicas simples y expiración automática. En nuestro caso, Redis cumple dos roles: manejar las unidades disponibles del stock farmacéutico y cachear resultados de consultas pesadas.
+Elegimos Redis para resolver las partes del sistema que necesitaban acceso rápido, operaciones atómicas simples y expiración automática. Redis cumple dos roles dentro del sistema. Por un lado administra las unidades disponibles del stock farmacéutico. Por otro, cachea resultados de consultas pesadas.
 
 \begin{itemize}
-    \item \textbf{Stock como contador frecuente:} las unidades disponibles de cada producto cambian cada vez que una consulta consume insumos. Este dato se comporta más como un contador operativo que como un documento clínico, por lo que Redis resulta más adecuado que MongoDB para administrarlo.
+    \item \textbf{Stock como contador frecuente.} Las unidades disponibles de cada producto cambian cada vez que una consulta consume insumos. Este dato se comporta más como un contador operativo que como un documento clínico, por lo que Redis resulta más adecuado que MongoDB para administrarlo.
 
-    \item \textbf{Lectura rápida de stock puntual:} la lógica de stock necesita consultar cuántas unidades quedan de un producto específico. Redis permite resolver esta lectura de forma directa y con muy baja latencia.
+    \item \textbf{Lectura rápida de stock puntual.} La lógica de stock necesita consultar cuántas unidades quedan de un producto específico. Redis permite resolver esta lectura de forma directa y con muy baja latencia.
 
-    \item \textbf{Consulta eficiente de stock bajo:} también necesitamos listar productos cuyo stock esté por debajo de cierto umbral. Para eso usamos un \textit{Sorted Set}, donde el identificador del producto es el valor y la cantidad disponible es el score.
+    \item \textbf{Consulta eficiente de stock bajo.} También necesitamos listar productos cuyo stock esté por debajo de cierto umbral. Para eso usamos un Sorted Set, donde el identificador del producto es el valor y la cantidad disponible es el score.
 
-    \item \textbf{Decremento atómico:} cuando una consulta consume productos, el decremento individual del contador debe ejecutarse de forma indivisible para evitar resultados negativos. Redis permite validar el stock disponible y descontar unidades de forma atómica mediante un script Lua.
+    \item \textbf{Decremento atómico.} Cuando una consulta consume productos, el decremento individual del contador debe ejecutarse de forma indivisible para evitar resultados negativos. Redis permite validar el stock disponible y descontar unidades de forma atómica mediante un script Lua.
 
-    \item \textbf{Caché con TTL:} algunas queries del dashboard agregan sobre toda la colección de consultas y pueden ejecutarse muchas veces. Redis permite guardar estos resultados con un TTL corto, evitando recalcular agregaciones costosas en cada lectura.
+    \item \textbf{Caché con TTL.} Algunas queries del dashboard agregan sobre toda la colección de consultas y pueden ejecutarse muchas veces. Redis permite guardar estos resultados con un TTL corto, evitando recalcular agregaciones costosas en cada lectura.
 \end{itemize}
 
 \subsection{División de responsabilidades entre motores}
@@ -296,39 +292,32 @@ Elegimos Redis para resolver las partes del sistema que necesitaban acceso rápi
 La arquitectura quedó dividida según el tipo de dato y el tipo de operación. MongoDB concentra la información persistente y descriptiva del sistema, mientras que Redis almacena datos operativos o derivados que requieren acceso rápido.
 
 \begin{itemize}
-    \item \textbf{MongoDB como fuente principal del dominio:} propietarios, pacientes, veterinarios, consultas, vacunaciones y productos viven en MongoDB. Estos datos representan el estado clínico y administrativo de VetSalud.
+    \item \textbf{MongoDB como fuente principal del dominio.} Propietarios, pacientes, veterinarios, consultas, vacunaciones y productos viven en MongoDB. Estos datos representan el estado clínico y administrativo de VetSalud.
 
-    \item \textbf{Redis como fuente de verdad del stock:} las unidades disponibles de cada producto viven en Redis. El catálogo del producto está en MongoDB, pero la cantidad disponible se administra en Redis porque cambia con más frecuencia y requiere operaciones atómicas.
+    \item \textbf{Redis como fuente de verdad del stock.} Las unidades disponibles de cada producto viven en Redis. El catálogo del producto está en MongoDB, pero la cantidad disponible se administra en Redis porque cambia con más frecuencia y requiere operaciones atómicas.
 
-    \item \textbf{Redis como caché descartable:} las claves \code{cache:*} no contienen información primaria, sino resultados derivados de consultas sobre MongoDB. Si una clave expira o se invalida, el resultado puede recalcularse.
+    \item \textbf{Redis como caché descartable.} Las claves \code{cache:*} guardan resultados derivados de consultas sobre MongoDB. Como no son información primaria, si una clave expira o se invalida el resultado puede recalcularse.
 
-    \item \textbf{Separación por prefijos:} las claves de stock usan el prefijo \code{stock:}, mientras que las claves de caché usan \code{cache:}. Esto evita mezclar datos con semánticas distintas dentro del mismo motor.
+    \item \textbf{Separación por prefijos.} Las claves de stock usan el prefijo \code{stock:}, mientras que las claves de caché usan \code{cache:}. Esto evita mezclar datos con semánticas distintas dentro del mismo motor.
 
-    \item \textbf{Limitación cross-motor:} MongoDB y Redis no comparten una transacción global. Por eso, en operaciones que involucran ambos motores, como registrar una consulta y descontar stock, existe una posible ventana de inconsistencia. Para reducirla, primero se valida stock en Redis, luego se inserta la consulta en MongoDB y finalmente se descuenta el stock de forma atómica.
+    \item \textbf{Limitación cross-motor.} MongoDB y Redis no comparten una transacción global, lo que genera una posible ventana de inconsistencia en operaciones que tocan ambos motores. La sección de limitaciones detalla cómo se mitiga.
 \end{itemize}
 
-\subsection{Conexión desde la aplicación}
-
-Ambos motores se levantan con Docker Compose. El archivo \code{docker-compose.yml} define un contenedor de MongoDB 7 y otro de Redis 7, exponiendo los puertos \code{27017} y \code{6379}. La aplicación Node.js se conecta a esos servicios mediante variables de entorno: \code{MONGO\_URI}, \code{DB\_NAME} y \code{REDIS\_URL}.
-
-La conexión se centraliza en el módulo \code{src/db.js}. Ese módulo expone una función \code{connect()} que inicializa los clientes la primera vez que se la invoca y luego reutiliza las mismas instancias para los siguientes requests. Para MongoDB se usa el cliente oficial \code{mongodb}, y para Redis se usa el cliente oficial \code{redis}.
-
-Esta decisión evita abrir una conexión nueva por cada endpoint ejecutado. No se implementó un pool propio porque el driver de MongoDB ya administra internamente sus conexiones, mientras que Redis opera naturalmente como un servidor single-threaded que procesa comandos de forma secuencial. Para el alcance del trabajo, centralizar la conexión en un único módulo también simplifica el seed, las queries y el cierre ordenado de clientes.
 \section{Modelo de Datos}
 
-El modelo de datos se diseñó pensando en las consultas que debía resolver el sistema. La idea no fue copiar un modelo relacional tradicional dentro de una base NoSQL, sino repartir la información según el tipo de dato y el tipo de operación esperada. MongoDB concentra las entidades clínicas y administrativas, mientras que Redis guarda estructuras específicas para stock y caché.
+El modelo de datos se diseñó pensando en las consultas que debía resolver el sistema. El modelo reparte la información según el tipo de dato y el tipo de operación esperada, en lugar de copiar un modelo relacional dentro de una base NoSQL. MongoDB concentra las entidades clínicas y administrativas, mientras que Redis guarda estructuras específicas para stock y caché.
 
-El sistema utiliza la base MongoDB \code{vetsalud}, salvo que se configure otro nombre mediante variables de entorno. Durante la carga inicial, el script de seed lee los archivos CSV, transforma los tipos de datos necesarios y carga las colecciones desde cero. Los identificadores provistos por los datasets se conservan como \code{\_id} de cada documento.
+El sistema utiliza la base MongoDB \code{vetsalud}. Durante la carga inicial, el script de seed lee los archivos CSV, transforma los tipos de datos necesarios y carga las colecciones desde cero. Los identificadores provistos por los datasets se conservan como \code{\_id} de cada documento.
 
 \subsection{Carga y extensión de los datasets}
 
-Los archivos ubicados en \code{data/} parten de los CSV entregados por la cátedra, pero fueron extendidos con registros propios para cumplir el requisito de incorporar al menos 10 registros adicionales por colección o tabla. La carga se realiza desde esos CSV extendidos mediante \code{npm run seed}.
+Los archivos ubicados en \code{data/} parten de los CSV de base, extendidos con registros propios. La carga se realiza desde esos CSV extendidos mediante \code{npm run seed}.
 
 \begin{table}[H]
 \centering
 \begin{tabular}{|l|c|c|c|}
 \hline
-\textbf{Dataset} & \textbf{Registros cátedra} & \textbf{Registros usados} & \textbf{Agregados} \\
+\textbf{Dataset} & \textbf{Registros base} & \textbf{Registros usados} & \textbf{Agregados} \\
 \hline
 \code{propietarios.csv} & 6 & 18 & 12 \\
 \code{pacientes.csv} & 8 & 22 & 14 \\
@@ -338,16 +327,15 @@ Los archivos ubicados en \code{data/} parten de los CSV entregados por la cáted
 \code{stock\_farmaceutico.csv} & 6 & 20 & 14 \\
 \hline
 \end{tabular}
-\caption{Comparación entre los datasets provistos y los datasets extendidos usados por el sistema.}
+\caption{Comparación entre los datasets de base y los datasets extendidos usados por el sistema.}
 \end{table}
 
-Además de agregar filas, se incorporaron dos campos al modelo cargado desde CSV. En \code{propietarios.csv} se agregó \code{activo}, necesario para implementar la baja lógica. En \code{consultas.csv} se agregó \code{tipo}, usado para distinguir entre \code{Consulta} y \code{Cirugia}. El dataset original no traía una columna específica para cirugías, pero sí incluía atenciones que podían clasificarse de esa forma, como fractura de pata y extracción dentaria. En los datos extendidos también se agregaron nuevas atenciones de tipo \code{Cirugia}, por ejemplo esterilización, resección de masa, cirugía oftalmológica y reparación de hernia.
-
-El seed también agrega algunas consultas con fechas relativas al mes actual. Esto no reemplaza los CSV extendidos, sino que ayuda a que la vista de ingresos mensuales tenga datos representativos aunque el trabajo se ejecute en otro mes.
+Además de agregar filas, se incorporaron dos campos al modelo cargado desde CSV. En \code{propietarios.csv} se agregó \code{activo}, necesario para implementar la baja lógica. En \code{consultas.csv} se agregó \code{tipo}, usado para distinguir entre \code{Consulta} y \code{Cirugia}.
+El seed también agrega algunas consultas con fechas relativas al mes actual. Estas consultas se suman a los CSV extendidos y ayudan a que la vista de ingresos mensuales tenga datos representativos aunque el sistema se ejecute en otro mes.
 
 \subsection{Modelo en MongoDB}
 
-En MongoDB se guardan las entidades principales del dominio de VetSalud: propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. Cada una se representa como una colección independiente porque tiene identidad propia y puede ser consultada desde distintos puntos del sistema.
+En MongoDB se guardan las entidades principales del dominio de VetSalud. Cada una se representa como una colección independiente porque tiene identidad propia y puede ser consultada desde distintos puntos del sistema.
 
 Las colecciones principales son:
 
@@ -510,7 +498,7 @@ Los veterinarios se modelan como una colección propia porque son una entidad ce
 }
 \end{codeblock}
 
-Una de las decisiones más importantes del modelo fue guardar consultas y cirugías en una misma colección llamada \code{consultas}. Ambas representan atenciones clínicas y comparten la mayor parte de sus campos: paciente, veterinario, fecha, motivo, diagnóstico, costo y estado. Para diferenciarlas se utiliza el campo \code{tipo}. Esto evita duplicar pipelines y simplifica las queries que trabajan sobre historial clínico, diagnósticos frecuentes o ingresos por veterinario.
+Una de las decisiones más importantes del modelo fue guardar consultas y cirugías en una misma colección llamada \code{consultas}. Ambas representan atenciones clínicas y comparten la mayor parte de sus campos, como paciente, veterinario, fecha, motivo, diagnóstico, costo y estado. Para diferenciarlas se utiliza el campo \code{tipo}. Esto evita duplicar pipelines y simplifica las queries que trabajan sobre historial clínico, diagnósticos frecuentes o ingresos por veterinario.
 
 \begin{codeblock}[Ejemplo de consulta]{json}
 {
@@ -526,7 +514,7 @@ Una de las decisiones más importantes del modelo fue guardar consultas y cirug�
 }
 \end{codeblock}
 
-Las vacunaciones se guardan en una colección separada. Aunque también se relacionan con pacientes y veterinarios, su estructura tiene otra semántica: lo central es la vacuna aplicada y la fecha de próxima dosis. Mezclarlas con consultas hubiera generado documentos con campos opcionales y no aportaba una ventaja clara para las queries pedidas. Los campos \code{fecha\_aplicacion} y \code{proxima\_dosis} se cargan como fechas.
+Las vacunaciones se guardan en una colección separada. Aunque también se relacionan con pacientes y veterinarios, su estructura tiene otra semántica, ya que lo central es la vacuna aplicada y la fecha de próxima dosis. Mezclarlas con consultas habría generado documentos con campos opcionales sin una ventaja clara para las queries que debíamos resolver. Los campos \code{fecha\_aplicacion} y \code{proxima\_dosis} se cargan como fechas.
 
 \begin{codeblock}[Ejemplo de vacunación]{json}
 {
@@ -554,13 +542,13 @@ Por último, la colección \code{productos} guarda el catálogo farmacéutico. E
 
 Además de las colecciones, se definieron índices sobre campos usados frecuentemente en filtros, relaciones o rangos. El seed crea índices sobre \code{fecha} e \code{id\_vet} en \code{consultas}, sobre \code{id\_propietario} en \code{pacientes}, y sobre \code{proveedor} y \code{vencimiento} en \code{productos}. Estos índices acompañan las consultas implementadas y evitan depender únicamente de recorridos completos sobre las colecciones.
 
-También se define una vista formal para la Query 11: \code{vista\_ingresos\_vet\_mes}. Esta vista usa un pipeline de agregación sobre consultas, cruza con veterinarios y expone los ingresos del mes actual agrupados por profesional.
+También se define una vista formal para la Query 11, llamada \code{vista\_ingresos\_vet\_mes}. Esta vista usa un pipeline de agregación sobre consultas, cruza con veterinarios y expone los ingresos del mes actual agrupados por profesional.
 
 \subsection{Modelo en Redis}
 
-Redis se usa con un modelo más acotado que MongoDB. No se intentó replicar las entidades clínicas ni duplicar el dominio completo, sino guardar únicamente estructuras donde Redis aporta una ventaja clara: unidades disponibles del stock farmacéutico y caché de consultas pesadas.
+Redis se usa con un modelo más acotado que MongoDB. No se intentó replicar las entidades clínicas ni duplicar el dominio completo. Solo se guardan estructuras donde Redis aporta una ventaja clara, que son las unidades disponibles del stock farmacéutico y la caché de consultas pesadas.
 
-La estructura principal es \code{stock:unidades}, un \textit{Sorted Set} donde cada producto tiene como valor su identificador y como score la cantidad disponible. Esta estructura se carga desde el campo \code{unidades} del CSV de stock farmacéutico.
+La estructura principal es \code{stock:unidades}, un Sorted Set donde cada producto tiene como valor su identificador y como score la cantidad disponible. Esta estructura se carga desde el campo \code{unidades} del CSV de stock farmacéutico.
 
 \begin{codeblock}[Estructura de stock en Redis]{}
 stock:unidades
@@ -572,7 +560,7 @@ PRD006    25
 PRD017    15
 \end{codeblock}
 
-El uso de un \textit{Sorted Set} responde directamente a la necesidad de ordenar y filtrar por cantidad disponible. Para la consulta de stock bajo, Redis permite buscar por rango sobre el score y obtener rápidamente los productos por debajo de un umbral.
+El uso de un Sorted Set responde directamente a la necesidad de ordenar y filtrar por cantidad disponible. Para la consulta de stock bajo, Redis permite buscar por rango sobre el score y obtener rápidamente los productos por debajo de un umbral.
 
 \begin{codeblock}[Consulta de stock bajo]{}
 ZRANGEBYSCORE stock:unidades -inf 49
@@ -590,19 +578,15 @@ Las claves de caché usadas por el sistema son:
     \item \code{cache:ingresos-vet-mes}, con TTL de 60 segundos.
 \end{itemize}
 
-Estas claves representan información derivada. Si expiran o se invalidan, el resultado puede recalcularse desde MongoDB. Por eso tienen una semántica distinta a \code{stock:unidades}: el stock representa estado operativo del sistema, mientras que la caché representa resultados temporales.
-
-La separación por prefijos también permite operar sobre la caché sin afectar el stock. Por ejemplo, el endpoint de limpieza de caché elimina claves \code{cache:*}, pero no toca \code{stock:unidades}. Esto es importante porque ambos datos viven en Redis, aunque no tienen la misma responsabilidad dentro del sistema.
+Estas claves representan información derivada. Si expiran o se invalidan, el resultado puede recalcularse desde MongoDB. Por eso tienen una semántica distinta a la de \code{stock:unidades}. El stock representa estado operativo del sistema, mientras que la caché representa resultados temporales.
 
 \subsection{Relación entre ambos motores}
 
-La relación entre MongoDB y Redis aparece principalmente en el manejo del stock farmacéutico. MongoDB guarda el catálogo de productos, mientras que Redis guarda las unidades disponibles. Esto significa que para mostrar productos con stock bajo el sistema combina información de ambos motores: Redis identifica rápidamente qué productos están por debajo del umbral y MongoDB aporta los datos descriptivos de esos productos.
+La relación entre MongoDB y Redis aparece principalmente en el manejo del stock farmacéutico. MongoDB guarda el catálogo de productos, mientras que Redis guarda las unidades disponibles. Esto significa que para mostrar productos con stock bajo el sistema combina información de ambos motores. Redis identifica rápidamente qué productos están por debajo del umbral y MongoDB aporta los datos descriptivos de esos productos.
 
-Este diseño evita duplicar información descriptiva. Redis no necesita saber el nombre, proveedor o vencimiento de cada producto; solo necesita saber cuántas unidades quedan. MongoDB, por su parte, no necesita actualizar constantemente un contador de stock que cambia con cada consulta. Cada motor conserva la parte del dato que mejor se adapta a su modelo.
+Este diseño evita duplicar información descriptiva. Redis no necesita saber el nombre, proveedor o vencimiento de cada producto, solo necesita saber cuántas unidades quedan. MongoDB, por su parte, no necesita actualizar constantemente un contador de stock que cambia con cada consulta. Cada motor conserva la parte del dato que mejor se adapta a su modelo.
 
-La relación también aparece en las queries cacheadas. En esos casos, MongoDB sigue siendo la fuente de verdad: la query se calcula sobre sus colecciones y el resultado se guarda temporalmente en Redis. Redis no reemplaza a MongoDB, sino que funciona como una capa de aceleración para lecturas frecuentes.
-
-Esta separación tiene una limitación: no existe una transacción global entre ambos motores. Por ejemplo, al registrar una consulta que consume productos, el sistema debe insertar el documento de la consulta en MongoDB y descontar unidades en Redis. Para reducir el riesgo de inconsistencias, se valida el stock antes de insertar la consulta y se descuenta mediante una operación atómica en Redis. Sin embargo, la coordinación entre ambos motores sigue siendo una limitación inherente de la arquitectura elegida.
+La relación también aparece en las queries cacheadas. En esos casos, MongoDB sigue siendo la fuente de verdad, ya que la query se calcula sobre sus colecciones y el resultado se guarda temporalmente en Redis. Redis funciona como una capa de aceleración para lecturas frecuentes.
 
 \section{Implementación de las Queries}
 
@@ -614,9 +598,7 @@ La primera query expone el endpoint \code{GET /api/pacientes-activos} y resuelve
 
 La consulta primero filtra los documentos de \code{pacientes} cuyo campo \code{activo} vale \code{true}. Luego utiliza \code{\$lookup} para unir cada paciente con su propietario, comparando \code{pacientes.id\_propietario} contra \code{propietarios.\_id}. Como cada paciente tiene un único propietario, se aplica \code{\$unwind} sobre el resultado de la unión y finalmente se proyectan los campos relevantes.
 
-Esta query aprovecha directamente la decisión de modelar pacientes y propietarios como colecciones separadas vinculadas por referencia. De esta forma, no se duplica la información del propietario dentro de cada paciente, pero se puede reconstruir el resultado combinado cuando el caso de uso lo requiere.
-
-La proyección incluye los datos del paciente activo y todos los campos del propietario cargados por el seed: identificador, nombre, apellido, DNI, email, teléfono, ciudad, provincia y estado lógico.
+La proyección incluye los datos del paciente activo junto con todos los campos del propietario cargados por el seed, como identificador, nombre, apellido, DNI, email, teléfono, ciudad, provincia y estado lógico.
 
 \begin{codeblock}[Ejemplo de resultado de Query 1]{json}
 [
@@ -649,8 +631,6 @@ La segunda query expone el endpoint \code{GET /api/consultas-seguimiento} y list
 El pipeline comienza con un \code{\$match} sobre \code{consultas.estado} para quedarse únicamente con las atenciones en seguimiento. Luego realiza un \code{\$lookup} contra \code{veterinarios} usando \code{id\_vet}, lo que permite mostrar el veterinario asignado a la atención. Después hace un segundo \code{\$lookup} contra \code{pacientes} para incorporar datos básicos del animal atendido. En ambos casos se usa \code{\$unwind}, porque cada consulta referencia a un único veterinario y a un único paciente.
 
 La proyección final conserva los datos principales de la consulta, incluyendo fecha, tipo, motivo, diagnóstico, estado y costo. También incluye el identificador del paciente, un bloque con datos básicos del paciente y otro bloque con los datos profesionales del veterinario. El resultado se ordena por fecha descendente para mostrar primero las atenciones más recientes que todavía requieren seguimiento.
-
-Esta query aprovecha el campo \code{estado} de la colección \code{consultas}, que permite distinguir atenciones cerradas de atenciones abiertas. También aprovecha que las atenciones clínicas, incluidas las cirugías, comparten una misma colección: el seguimiento operativo se puede consultar desde \code{consultas} sin duplicar lógica en otra entidad.
 
 \begin{codeblock}[Ejemplo de resultado de Query 2]{json}
 [
@@ -689,11 +669,9 @@ Antes de ejecutar los pipelines, la función valida que el paciente solicitado e
 
 La implementación ejecuta dos agregaciones en paralelo. La primera consulta la colección \code{consultas}, filtra por \code{id\_paciente}, une cada atención con su veterinario mediante \code{\$lookup} y proyecta el evento con un formato común. La segunda hace lo mismo sobre \code{vacunaciones}, usando \code{fecha\_aplicacion} como fecha del evento e incorporando los campos propios de vacunas, como \code{nombre\_vacuna} y \code{proxima\_dosis}.
 
-Se decidió realizar la combinación final en la capa de servicio porque el historial integra eventos de dos colecciones con estructuras distintas. MongoDB concentra el trabajo más pesado de cada origen: filtra por paciente, resuelve la unión con veterinarios y proyecta cada evento con los campos necesarios. Node.js queda limitado a una tarea de orquestación: llevar ambas listas a un formato común, unirlas y aplicar el criterio de ordenamiento final.
+Se decidió realizar la combinación final en la capa de servicio porque el historial integra eventos de dos colecciones con estructuras distintas. MongoDB concentra el trabajo más pesado de cada origen, ya que filtra por paciente, resuelve la unión con veterinarios y proyecta cada evento con los campos necesarios. Node.js queda limitado a una tarea de orquestación, llevando ambas listas a un formato común, uniéndolas y aplicando el criterio de ordenamiento final.
 
 Ambos resultados se normalizan a una misma estructura con campos como \code{tipo\_evento}, \code{id\_evento}, \code{fecha}, \code{paciente} y \code{veterinario}. Luego se concatenan en Node.js y se ordenan por fecha descendente, mostrando primero los eventos más recientes. En caso de empate de fecha, se usa el identificador del evento como segundo criterio de orden.
-
-Esta query justifica dos decisiones de modelado. Por un lado, consultas y cirugías comparten la colección \code{consultas}, por lo que todas las atenciones clínicas del paciente se recuperan desde el mismo origen. Por otro lado, vacunaciones se mantiene como colección separada porque tiene una semántica distinta, pero puede integrarse al historial mediante una normalización final del resultado.
 
 \begin{codeblock}[Fragmento de resultado de Query 3 para P001]{json}
 [
@@ -756,7 +734,7 @@ El pipeline comienza desde \code{pacientes}, porque el dato que se necesita cont
 
 Después de identificar los propietarios que cumplen la condición, la query usa \code{\$lookup} contra \code{propietarios} para incorporar sus datos de contacto. Como cada grupo corresponde a un único propietario, se aplica \code{\$unwind} y finalmente se proyecta una salida con el identificador del propietario, la cantidad total de pacientes, los datos del propietario y el detalle de las mascotas asociadas.
 
-La consulta cuenta pacientes registrados, no solamente pacientes activos, porque la consigna no restringe este punto a mascotas activas. Por eso el resultado conserva el campo \code{activo} en cada paciente: permite ver si alguna de las mascotas asociadas está dada de baja lógicamente sin excluirla del conteo. El resultado se ordena por cantidad de pacientes en forma descendente y, ante empate, por identificador de propietario.
+La consulta cuenta todos los pacientes registrados, incluidos los inactivos, ya que el requerimiento no restringe el conteo a mascotas activas. Por eso el resultado conserva el campo \code{activo} en cada paciente, lo que permite ver si alguna mascota asociada está dada de baja sin excluirla del conteo. El resultado se ordena por cantidad de pacientes en forma descendente y, ante empate, por identificador de propietario.
 
 \begin{codeblock}[Ejemplo de resultado de Query 4]{json}
 [
@@ -804,13 +782,11 @@ La consulta cuenta pacientes registrados, no solamente pacientes activos, porque
 
 La sexta query expone el endpoint \code{GET /api/pacientes-vacunas-vencidas} y lista los pacientes que tienen al menos una vacunación cuya próxima dosis es anterior a la fecha actual. Se resuelve íntegramente en MongoDB usando las colecciones \code{vacunaciones} y \code{pacientes}.
 
-El pipeline parte de \code{vacunaciones}, porque el criterio de vencimiento está en el campo \code{proxima\_dosis}. La función toma la fecha del sistema, la normaliza al inicio del día y filtra con \code{\$match} las vacunaciones donde \code{proxima\_dosis < hoy}. Esta normalización evita marcar como vencida una vacuna cuya próxima dosis sea el mismo día de ejecución.
+El pipeline parte de \code{vacunaciones}, porque el criterio de vencimiento está en el campo \code{proxima\_dosis}. La función toma la fecha del sistema, la normaliza al inicio del día y filtra con \code{\$match} las vacunaciones donde \code{proxima\_dosis} es anterior a hoy. Esta normalización evita marcar como vencida una vacuna cuya próxima dosis sea el mismo día de ejecución.
 
 Después, la query agrupa por paciente. Para cada uno calcula la cantidad de vacunas vencidas, conserva el detalle en un arreglo y obtiene la próxima dosis más antigua con \code{\$min}. Luego realiza un \code{\$lookup} contra \code{pacientes} para incorporar los datos básicos del animal y proyecta el resultado final.
 
 El ordenamiento usa primero \code{proxima\_dosis\_mas\_antigua} en forma ascendente, de modo que los pacientes con vencimientos más antiguos aparezcan antes. Esto permite usar la consulta como una lista de priorización operativa para contactar propietarios o programar revacunaciones.
-
-Esta query justifica mantener las vacunaciones como colección separada de las consultas. El vencimiento de una vacuna no depende del diagnóstico ni del costo de una atención, sino de una fecha propia del calendario sanitario del paciente.
 
 \begin{codeblock}[Ejemplo de resultado de Query 6]{json}
 [
@@ -848,7 +824,7 @@ Esta query justifica mantener las vacunaciones como colección separada de las c
 
 La novena query expone el endpoint \code{GET /api/controles-baratos?max=5000} y lista las consultas de control cuyo costo es menor al umbral indicado. Se resuelve con MongoDB usando las colecciones \code{consultas} y \code{pacientes}.
 
-Para esta query asumimos que ``control'' es equivalente a una consulta médica no quirúrgica, por lo que cualquier documento con \code{tipo = Consulta} cuenta como control.
+Para esta query asumimos que un control equivale a una consulta médica no quirúrgica, por lo que cualquier documento con \code{tipo} igual a \code{Consulta} cuenta como control.
 
 El pipeline aplica un \code{\$match} compuesto sobre \code{tipo} y \code{costo}. Luego hace un \code{\$lookup} contra \code{pacientes} para mostrar el animal atendido, aplica \code{\$unwind} porque cada consulta tiene un único paciente, ordena por costo ascendente y proyecta los datos principales de la atención.
 
@@ -870,9 +846,9 @@ El pipeline aplica un \code{\$match} compuesto sobre \code{tipo} y \code{costo}.
 
 \subsubsection{Query 10: Pacientes de una sucursal determinada}
 
-La décima query expone el endpoint de pacientes por sucursal y lista los pacientes asociados a una sucursal determinada. Se resuelve con MongoDB usando las colecciones de \code{veterinarios}, \code{consultas}, \code{vacunaciones} y \code{pacientes}.
+La décima query expone el endpoint de pacientes por sucursal y lista los pacientes asociados a una sucursal determinada. Se resuelve con MongoDB usando las colecciones \code{veterinarios}, \code{consultas}, \code{vacunaciones} y \code{pacientes}.
 
-La sucursal no está guardada en el documento del paciente, sino en el veterinario. Por eso el pipeline comienza desde \code{veterinarios} y filtra por el nombre de sucursal recibido como parámetro. A partir de esos veterinarios, la query busca pacientes atendidos tanto en \code{consultas} como en \code{vacunaciones}.
+La sucursal es un atributo del veterinario y no del paciente. Por eso el pipeline comienza desde \code{veterinarios} y filtra por el nombre de sucursal recibido como parámetro. A partir de esos veterinarios, la query busca pacientes atendidos tanto en \code{consultas} como en \code{vacunaciones}.
 
 Después de traer ambos conjuntos, se usa \code{\$setUnion} para unir los identificadores de pacientes sin duplicados. Luego se desarma el arreglo, se agrupa nuevamente por paciente para deduplicar entre distintos veterinarios de la misma sucursal y se hace un \code{\$lookup} final contra \code{pacientes} para devolver el documento completo del animal.
 
@@ -901,13 +877,13 @@ Después de traer ambos conjuntos, se usa \code{\$setUnion} para unir los identi
 
 \subsubsection{Query 12: Propietarios a revisar}
 
-La duodécima query expone el endpoint \code{GET /api/propietarios-inactivos}. Para esta consulta, consideramos que el listado de propietarios inactivos como aquellos propietarios dados de baja, propietarios sin mascotas registradas y propietarios activos con mascotas pero sin consultas recientes.
+La duodécima query expone el endpoint \code{GET /api/propietarios-inactivos}. Para esta consulta consideramos como propietarios a revisar a los dados de baja, los que no tienen mascotas registradas y los activos con mascotas pero sin consultas recientes.
 
 La función calcula el límite temporal a partir de la fecha del sistema, tomando el inicio del día ubicado un año atrás. Luego parte de \code{propietarios}, une cada dueño con sus pacientes mediante \code{\$lookup} y, con esos identificadores de pacientes, busca consultas cuya fecha sea mayor o igual a ese límite.
 
-Después agrega la cantidad de mascotas y la cantidad de consultas recientes. La condición final conserva propietarios que cumplan al menos una de las tres condiciones definidas. Esta interpretación permite detectar dueños sin actividad vigente desde distintas causas: baja administrativa, ausencia de mascotas o falta de consultas durante el período analizado.
+Después agrega la cantidad de mascotas y la cantidad de consultas recientes. La condición final conserva propietarios que cumplan al menos una de las tres condiciones definidas. Esta interpretación permite detectar dueños sin actividad vigente desde distintas causas, como una baja administrativa, la ausencia de mascotas o la falta de consultas durante el período analizado.
 
-Para que el resultado sea fácil de leer, la query asigna una \code{categoria} con \code{\$switch}. La categoría \code{Dado de baja} tiene prioridad sobre las demás; luego aparece \code{Sin mascotas}; y, como caso restante, \code{Sin consultas en el último año}. Ese mismo criterio se usa para ordenar el resultado. La consulta considera consultas, no vacunaciones, porque el enunciado pide específicamente consultas registradas.
+Para que el resultado sea fácil de leer, la query asigna una \code{categoria} con \code{\$switch}. La categoría \code{Dado de baja} tiene prioridad sobre las demás. Le sigue \code{Sin mascotas} y, como caso restante, queda \code{Sin consultas en el último año}. Ese mismo criterio se usa para ordenar el resultado. La consulta tiene en cuenta consultas y deja afuera las vacunaciones, dado que el criterio se define sobre consultas registradas.
 
 \begin{codeblock}[Fragmento de resultado de Query 12]{json}
 [
@@ -989,11 +965,11 @@ La baja se implementa como baja lógica. En lugar de borrar físicamente el docu
 
 La decimoquinta query expone el endpoint \code{POST /api/decrementar-stock} y descuenta unidades de un producto del stock farmacéutico. Se resuelve íntegramente en Redis usando la clave \code{stock:unidades}.
 
-El stock está modelado como un \textit{Sorted Set}: cada producto es un miembro del conjunto y la cantidad disponible se guarda como score. La función recibe \code{id\_producto} y \code{cantidad}; antes de ejecutar el descuento valida que el producto esté informado y que la cantidad sea un entero positivo.
+El stock está modelado como un Sorted Set, donde cada producto es un miembro del conjunto y la cantidad disponible se guarda como score. La función recibe \code{id\_producto} y \code{cantidad}. Antes de ejecutar el descuento valida que el producto esté informado y que la cantidad sea un entero positivo.
 
 El decremento se realiza mediante un script Lua ejecutado con \code{redis.eval}. Dentro de ese script Redis verifica que el producto exista, valida que el stock actual alcance para cubrir la cantidad solicitada y descuenta las unidades con \code{ZINCRBY}. Como el script se ejecuta de forma atómica, dos requests concurrentes no pueden validar ambos contra el mismo stock inicial y dejar unidades negativas.
 
-El script devuelve códigos simples: \code{-1} si el producto no existe, \code{-2} si el stock es insuficiente, y el nuevo valor de unidades cuando el descuento se realiza correctamente. La función traduce esos códigos a errores de negocio o a una respuesta con las unidades restantes.
+El script devuelve códigos simples. Un \code{-1} indica que el producto no existe, un \code{-2} indica stock insuficiente, y un valor positivo es el nuevo número de unidades cuando el descuento se realiza correctamente. La función traduce esos códigos a errores de negocio o a una respuesta con las unidades restantes.
 
 \begin{codeblock}[Ejemplo de resultado de Query 15]{json}
 {
@@ -1006,13 +982,13 @@ El script devuelve códigos simples: \code{-1} si el producto no existe, \code{-
 
 \subsubsection{Query 8: Stock de productos con menos de 50 unidades}
 
-La octava query expone el endpoint \code{GET /api/stock-bajo?umbral=50} y lista productos cuyo stock se encuentra por debajo del umbral indicado. Es una query políglota: Redis identifica rápidamente los productos con pocas unidades y MongoDB aporta la información descriptiva del catálogo.
+La octava query expone el endpoint \code{GET /api/stock-bajo?umbral=50} y lista productos cuyo stock se encuentra por debajo del umbral indicado. Es una query políglota. Redis identifica rápidamente los productos con pocas unidades y MongoDB aporta la información descriptiva del catálogo.
 
-En Redis se usa la clave \code{stock:unidades}, modelada como un \textit{Sorted Set}. El identificador del producto es el valor del conjunto y la cantidad disponible es el score. La consulta usa un rango por score para obtener los productos con unidades menores al umbral, manteniendo el orden ascendente por stock.
+En Redis se usa la clave \code{stock:unidades}, modelada como un Sorted Set. El identificador del producto es el valor del conjunto y la cantidad disponible es el score. La consulta usa un rango por score para obtener los productos con unidades menores al umbral, manteniendo el orden ascendente por stock.
 
 Luego, con los identificadores devueltos por Redis, la función consulta la colección \code{productos} en MongoDB mediante \code{\$in}. MongoDB devuelve los campos de catálogo, como nombre, categoría, precio unitario, vencimiento y proveedor. Finalmente, Node.js combina ambos resultados conservando el orden que vino de Redis.
 
-Esta query justifica la separación entre catálogo y stock operativo. MongoDB no necesita actualizar un contador de unidades con cada operación, y Redis no necesita duplicar los datos descriptivos del producto. Cada motor conserva la parte del dato que resuelve mejor.
+Esta query justifica la separación entre catálogo y stock operativo. MongoDB no necesita actualizar un contador de unidades con cada operación, y Redis no necesita duplicar los datos descriptivos del producto.
 
 \begin{codeblock}[Fragmento de resultado de Query 8]{json}
 [
@@ -1041,13 +1017,13 @@ Esta query justifica la separación entre catálogo y stock operativo. MongoDB n
 
 La decimocuarta query expone el endpoint \code{POST /api/consultas} y registra una nueva atención médica. Se apoya principalmente en MongoDB, usando las colecciones \code{pacientes}, \code{veterinarios} y \code{consultas}, pero también puede interactuar con Redis si la consulta informa productos consumidos.
 
-Antes de insertar la consulta, la función valida que el paciente exista y esté activo. También valida que el veterinario exista y esté activo. Estas validaciones son necesarias porque \code{consultas} guarda referencias por identificador; insertar una atención con un paciente o veterinario inexistente rompería la integridad referencial del modelo.
+Antes de insertar la consulta, la función valida que el paciente exista y esté activo. También valida que el veterinario exista y esté activo. Estas validaciones son necesarias porque \code{consultas} guarda referencias por identificador. Insertar una atención con un paciente o veterinario inexistente rompería la integridad referencial del modelo.
 
 Si el request incluye \code{productos\_usados}, la función consolida productos repetidos y valida que cada cantidad sea un entero positivo. Luego consulta Redis para comprobar que cada producto exista en \code{stock:unidades} y que haya unidades suficientes. La consolidación evita validar dos líneas del mismo producto como si fueran consumos independientes contra el mismo stock inicial.
 
-Para el documento de la consulta, si el cliente no envía \code{\_id}, la función genera el siguiente identificador con prefijo \code{CON}. Luego inserta la atención en MongoDB con fecha, tipo, motivo, diagnóstico, costo y estado. Una vez registrada la consulta, invalida las claves de caché que dependen de la colección \code{consultas}: \code{cache:top-diagnosticos}, \code{cache:ingresos-vet-mes} y \code{cache:vets-consultas-60d}.
+Para el documento de la consulta, si el cliente no envía \code{\_id}, la función genera el siguiente identificador con prefijo \code{CON}. Luego inserta la atención en MongoDB con fecha, tipo, motivo, diagnóstico, costo y estado. Una vez registrada la consulta, invalida las claves de caché que dependen de la colección \code{consultas}, que son \code{cache:top-diagnosticos}, \code{cache:ingresos-vet-mes} y \code{cache:vets-consultas-60d}.
 
-Cuando hay productos usados, el descuento se delega en la Query 15. De esta forma, la validación de stock y el decremento final usan la misma estructura de Redis y el descuento efectivo se realiza con el script Lua atómico. 
+Cuando hay productos usados, el descuento se delega en la Query 15. De esta forma, la validación de stock y el decremento final usan la misma estructura de Redis y el descuento efectivo se realiza con el script Lua atómico.
 
 \begin{codeblock}[Ejemplo de resultado de Query 14]{json}
 {
@@ -1074,9 +1050,9 @@ Cuando hay productos usados, el descuento se delega en la Query 15. De esta form
 
 \subsection{Queries cacheadas}
 
-Las queries cacheadas usan un patrón \textit{cache-aside}. La aplicación primero consulta Redis con una clave determinada. Si el valor existe, lo deserializa desde JSON y devuelve ese resultado. Si no existe, ejecuta la agregación correspondiente en MongoDB, serializa el resultado, lo guarda en Redis con un TTL y finalmente lo devuelve al cliente.
+Las queries cacheadas usan un patrón cache-aside. La aplicación primero consulta Redis con una clave determinada. Si el valor existe, lo deserializa desde JSON y devuelve ese resultado. Si no existe, ejecuta la agregación correspondiente en MongoDB, serializa el resultado, lo guarda en Redis con un TTL y finalmente lo devuelve al cliente.
 
-Este patrón se eligió porque MongoDB sigue siendo la fuente de verdad para los datos clínicos y administrativos. Redis solamente acelera lecturas frecuentes del dashboard. En consecuencia, los resultados cacheados son descartables: si una clave expira o se borra, la query vuelve a calcularse contra MongoDB.
+Este patrón se eligió porque MongoDB sigue siendo la fuente de verdad para los datos clínicos y administrativos. Redis solamente acelera lecturas frecuentes del dashboard. En consecuencia, los resultados cacheados son descartables, ya que si una clave expira o se borra la query vuelve a calcularse contra MongoDB.
 
 Para hacer visible este comportamiento, el servidor agrega el header \code{X-Cache} en las respuestas cacheadas. El valor puede indicar \code{MISS} cuando se recalcula el resultado o \code{HIT} cuando se responde desde Redis. La implementación usa \code{AsyncLocalStorage} para asociar esos eventos de caché al request HTTP actual, evitando usar variables globales compartidas entre requests concurrentes.
 
@@ -1084,11 +1060,11 @@ Para hacer visible este comportamiento, el servidor agrega el header \code{X-Cac
 
 La quinta query expone el endpoint \code{GET /api/vets-activos-consultas-60d} y lista los veterinarios activos junto con la cantidad de consultas registradas en los últimos 60 días. Se calcula con MongoDB sobre las colecciones \code{veterinarios} y \code{consultas}, y el resultado se guarda temporalmente en Redis como caché.
 
-La función toma la fecha del sistema y construye un rango de días calendario: desde el inicio del día ubicado 60 días atrás hasta el inicio del día siguiente al de ejecución. Este criterio es importante porque los datos del proyecto se cargan como fechas de día completo, no como instantes con hora clínica.
+La función toma la fecha del sistema y construye un rango de días calendario, desde el inicio del día ubicado 60 días atrás hasta el inicio del día siguiente al de ejecución. Este criterio es importante porque los datos del proyecto se cargan como fechas de día completo, no como instantes con hora clínica.
 
-El pipeline comienza desde \code{veterinarios} con un \code{\$match} sobre \code{activo: true}. Luego usa un \code{\$lookup} con pipeline correlacionado contra \code{consultas}: compara el veterinario de cada atención con el documento activo que se está procesando y filtra la fecha dentro del rango calculado. En la proyección final, la cantidad se obtiene con \code{\$size} sobre el arreglo de consultas recientes.
+El pipeline comienza desde \code{veterinarios} con un \code{\$match} sobre \code{activo} en \code{true}. Luego usa un \code{\$lookup} con pipeline correlacionado contra \code{consultas}, comparando el veterinario de cada atención con el documento activo que se está procesando y filtrando la fecha dentro del rango calculado. En la proyección final, la cantidad se obtiene con \code{\$size} sobre el arreglo de consultas recientes.
 
-El resultado incluye también veterinarios activos sin consultas recientes, porque la consigna pide listar veterinarios activos y su cantidad de consultas. Finalmente se ordena por \code{cantidad\_consultas\_60d} en forma descendente y, ante empates, por apellido y nombre.
+El resultado incluye también veterinarios activos sin consultas recientes, porque el objetivo es listar veterinarios activos y su cantidad de consultas. Finalmente se ordena por \code{cantidad\_consultas\_60d} en forma descendente y, ante empates, por apellido y nombre.
 
 Esta query es buena candidata para caché porque cruza veterinarios con consultas y puede ejecutarse repetidamente desde el dashboard. Por eso se guarda en Redis bajo la clave \code{cache:vets-consultas-60d} con un TTL de 300 segundos. Cuando se registra una nueva consulta médica, la función de alta invalida esta clave para que el próximo pedido recalcule el resultado desde MongoDB.
 
@@ -1112,8 +1088,6 @@ Esta query es buena candidata para caché porque cruza veterinarios con consulta
 La séptima query expone el endpoint \code{GET /api/top-diagnosticos} y obtiene los cinco diagnósticos más frecuentes registrados en las atenciones. Se calcula con MongoDB sobre la colección \code{consultas} y se guarda temporalmente en Redis como caché.
 
 El pipeline agrupa los documentos por \code{diagnostico}, cuenta ocurrencias con \code{\$sum}, ordena de mayor a menor por cantidad y limita el resultado a cinco elementos. La salida conserva el diagnóstico como identificador del grupo y agrega el campo \code{total}.
-
-Esta query aprovecha que consultas y cirugías se guardan en la misma colección de atenciones clínicas. De esa forma, el análisis de diagnósticos frecuentes se calcula sobre el historial clínico completo que vive en \code{consultas}, sin tener que duplicar el pipeline para otra colección.
 
 Como es una agregación que puede consultarse muchas veces desde el dashboard y no necesita recalcularse en cada lectura, el resultado se cachea en Redis bajo la clave \code{cache:top-diagnosticos} con un TTL de 300 segundos. Cuando se registra una nueva consulta médica, la función de alta invalida esta clave para que el siguiente pedido vuelva a calcular el ranking desde MongoDB.
 
@@ -1144,15 +1118,13 @@ Como es una agregación que puede consultarse muchas veces desde el dashboard y 
 
 \subsubsection{Query 11: Ingresos por veterinario en el mes actual}
 
-La undécima query expone el endpoint \code{GET /api/ingresos-vet-mes}. Su resultado se obtiene leyendo una vista formal de MongoDB.
-
-La vista se llama \code{vista\_ingresos\_vet\_mes}. Se define sobre la colección \code{consultas} y usa un pipeline de agregación para resumir las atenciones por veterinario.
+La undécima query expone el endpoint \code{GET /api/ingresos-vet-mes}. Su resultado se obtiene leyendo una vista formal de MongoDB llamada \code{vista\_ingresos\_vet\_mes}, definida sobre la colección \code{consultas}.
 
 El pipeline de la vista calcula el rango del mes actual dentro de MongoDB usando la variable \code{\$\$NOW}. A partir de ese valor, filtra las consultas cuya fecha pertenece al mes en curso, agrupa por veterinario, suma el campo \code{costo} como ingresos y cuenta cuántas atenciones componen ese total.
 
 Luego, la vista cruza el resultado con \code{veterinarios} para incorporar el nombre completo del profesional y su sucursal. La salida queda compuesta por el identificador del veterinario, el nombre del veterinario, la sucursal, el total de ingresos y la cantidad de atenciones. El resultado se ordena por ingresos descendentes.
 
-Esta vista aprovecha que consultas y cirugías comparten la colección \code{consultas}: ambas representan atenciones clínicas con costo y participan del cálculo de ingresos. Para que la consulta tenga datos representativos independientemente del mes en que se ejecute el seed, se agregan algunas consultas con fechas relativas al mes actual. Además, el endpoint guarda en Redis durante 60 segundos el resultado de leer la vista, porque las vistas estándar de MongoDB se calculan al consultarse y no almacenan el resultado materializado.
+El endpoint guarda en Redis durante 60 segundos el resultado de leer la vista, porque las vistas estándar de MongoDB se calculan al consultarse y no almacenan el resultado materializado.
 
 \begin{codeblock}[Ejemplo de resultado de Query 11]{json}
 [
@@ -1166,272 +1138,22 @@ Esta vista aprovecha que consultas y cirugías comparten la colección \code{con
 ]
 \end{codeblock}
 
-\section{Manual de Usuario}
-
-Esta sección explica cómo levantar y usar el sistema desde cero. La idea es que alguien que clone el repositorio pueda cargar las bases, abrir la interfaz, ejecutar las consultas y probar las operaciones de escritura sin tener que leer el código primero.
-
-\subsection{Requisitos previos}
-
-Para correr el proyecto localmente se necesita tener instalados Docker, Docker Compose, Node.js y npm. En nuestro caso usamos Docker para levantar MongoDB y Redis, y Node.js para ejecutar el seed y la API Express.
-
-Antes de empezar conviene revisar que estén libres los siguientes puertos:
-
-\begin{itemize}
-    \item \code{27017}, usado por MongoDB.
-    \item \code{6379}, usado por Redis.
-    \item \code{3000}, usado por la API y el dashboard web.
-\end{itemize}
-
-Si alguno de esos puertos ya está ocupado, el contenedor o el servidor pueden fallar al iniciar. En ese caso hay que detener el proceso que lo está usando o cambiar la configuración correspondiente.
-
-\subsection{Primera ejecución}
-
-Los comandos se ejecutan desde la carpeta raíz del proyecto. En este caso, esa carpeta es vetsalud-bdd. El orden recomendado es el siguiente:
-
-\begin{codeblock}[Levantar el proyecto]{bash}
-docker compose up -d
-cp .env.example .env
-npm install
-npm run seed
-npm start
-\end{codeblock}
-
-El primer comando levanta los contenedores de MongoDB y Redis. El archivo \code{.env} define las URLs de conexión y el nombre de la base de datos. El comando \code{npm install} instala las dependencias de Node.js, \code{npm run seed} carga los datos iniciales y \code{npm start} deja la API escuchando en \code{http://localhost:3000}.
-
-Cuando el servidor queda iniciado, en la terminal debería aparecer un mensaje similar a:
-
-\begin{codeblock}[Servidor iniciado]{bash}
-API escuchando en http://localhost:3000
-\end{codeblock}
-
-\subsection{Carga inicial de datos}
-
-El seed toma los archivos CSV de la carpeta \code{data} y carga la información en MongoDB y Redis. En MongoDB se cargan propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. En Redis se carga el stock de productos dentro de la clave \code{stock:unidades}.
-
-También se crean índices en MongoDB y se recrea la vista de ingresos usada por la Query 11. Además, el seed agrega algunas consultas con fechas relativas al mes actual para que la vista de ingresos mensuales tenga datos aunque el proyecto se ejecute en otro momento.
-
-Es importante tener presente que \code{npm run seed} reinicia los datos de trabajo. Esto es útil para volver a un estado conocido después de probar altas, bajas o descuentos de stock. Por ejemplo, si durante una demo se descuentan unidades o se agrega un propietario de prueba, al correr nuevamente el seed se vuelve al estado inicial del dataset.
-
-\subsection{Uso del dashboard}
-
-El sistema incluye una interfaz web simple en \code{http://localhost:3000}. Sirve para probar de forma cómoda las 15 consultas y servicios pedidos.
-
-La pantalla tiene dos pestañas principales:
-
-\begin{itemize}
-    \item \textbf{Dashboard:} agrupa las acciones por tema. Hay bloques para pacientes y propietarios, atenciones, reportes y stock.
-    \item \textbf{Queries:} muestra las consultas de forma más directa, con el endpoint que se está ejecutando y, cuando corresponde, los parámetros o el cuerpo JSON.
-\end{itemize}
-
-Cada vez que se ejecuta una acción, el resultado aparece en el panel inferior. Por defecto se muestra como tabla cuando el formato lo permite. Si se quiere ver la respuesta cruda, se puede usar el botón \code{Ver JSON}. Esto ayuda bastante cuando una respuesta tiene objetos anidados, por ejemplo propietarios con pacientes, historiales clínicos o consultas con productos usados.
-
-En las queries cacheadas, la interfaz muestra una etiqueta de caché cuando la respuesta incluye el header \code{X-Cache}. Si aparece \code{MISS}, significa que el resultado se calculó y luego se guardó en Redis. Si aparece \code{HIT}, significa que se devolvió desde la caché. Las queries donde esto se ve especialmente son Q5, Q7 y Q11.
-
-\subsection{Consultas disponibles desde la interfaz}
-
-Las consultas de lectura se pueden ejecutar desde el dashboard sin escribir comandos. Algunas usan valores fijos por defecto para que sea fácil probarlas apenas se carga el seed.
-
-\begin{itemize}
-    \item \textbf{Q1: Pacientes activos.} Lista pacientes activos con los datos de su propietario.
-    \item \textbf{Q2: Consultas en seguimiento.} Muestra atenciones cuyo estado es \code{Seguimiento}.
-    \item \textbf{Q3: Historial de paciente.} Requiere un id de paciente, por ejemplo \code{P001}.
-    \item \textbf{Q4: Propietarios con múltiples pacientes.} Lista dueños con más de una mascota registrada.
-    \item \textbf{Q5: Veterinarios activos con consultas en 60 días.} Devuelve la cantidad de consultas recientes por veterinario activo.
-    \item \textbf{Q6: Vacunas vencidas.} Lista pacientes cuya próxima dosis es anterior al día actual.
-    \item \textbf{Q7: Top diagnósticos.} Muestra los cinco diagnósticos más frecuentes.
-    \item \textbf{Q8: Stock bajo.} Permite indicar un umbral; por defecto se usa \code{50}.
-    \item \textbf{Q9: Controles económicos.} Permite indicar un costo máximo; por defecto se usa \code{5000}.
-    \item \textbf{Q10: Pacientes por sucursal.} Permite elegir una sucursal, por ejemplo \code{Palermo}.
-    \item \textbf{Q11: Ingresos por veterinario.} Lee la vista agregada del mes actual.
-    \item \textbf{Q12: Propietarios a revisar.} Clasifica propietarios dados de baja, sin mascotas o sin consultas recientes.
-\end{itemize}
-
-\subsection{ABM de propietarios}
-
-La Query 13 implementa alta, modificación y baja lógica de propietarios. Desde el dashboard se encuentra en la sección de pacientes y propietarios, con tres subpestañas: \textit{Alta}, \textit{Modificar} y \textit{Baja}.
-
-Para dar de alta un propietario se debe indicar al menos un \code{\_id}. El sistema valida que no exista otro propietario con el mismo identificador. Si no se informa \code{activo}, se toma \code{true} como valor por defecto; si se envía el campo, se respeta el valor recibido.
-
-Un ejemplo de alta desde la API sería:
-
-\begin{codeblock}[Alta de propietario]{bash}
-curl -X POST http://localhost:3000/api/propietarios \
-  -H "Content-Type: application/json" \
-  -d '{
-    "_id": "C100",
-    "nombre": "Lucia",
-    "apellido": "Vega",
-    "dni": "40111222",
-    "email": "lu@mail.com",
-    "telefono": "1144222333",
-    "ciudad": "CABA",
-    "provincia": "Buenos Aires"
-  }'
-\end{codeblock}
-
-Para modificar un propietario se usa el identificador en la URL y se envían solamente los campos que se quieren cambiar. El sistema ignora un eventual \code{\_id} dentro del body para evitar que se cambie la clave primaria.
-
-\begin{codeblock}[Modificación de propietario]{bash}
-curl -X PUT http://localhost:3000/api/propietarios/C100 \
-  -H "Content-Type: application/json" \
-  -d '{ "ciudad": "Rosario" }'
-\end{codeblock}
-
-La baja se hace de forma lógica. Esto conserva el historial y evita perder referencias desde pacientes o consultas.
-
-\begin{codeblock}[Baja lógica de propietario]{bash}
-curl -X DELETE http://localhost:3000/api/propietarios/C100
-\end{codeblock}
-
-\subsection{Registro de consultas}
-
-La Query 14 registra una nueva consulta médica. Desde el dashboard se encuentra en el bloque \textit{Registrar consulta}. Para cargar una atención se debe indicar un paciente y un veterinario existentes. Además, ambos deben estar activos.
-
-Los campos principales son:
-
-\begin{itemize}
-    \item \code{id\_paciente}: identificador del paciente atendido.
-    \item \code{id\_vet}: identificador del veterinario que atiende.
-    \item \code{tipo}: puede ser \code{Consulta} o \code{Cirugia}.
-    \item \code{motivo}: motivo de la atención.
-    \item \code{diagnostico}: diagnóstico registrado.
-    \item \code{costo}: importe de la atención.
-    \item \code{estado}: por ejemplo \code{Cerrada} o \code{Seguimiento}.
-    \item \code{productos\_usados}: lista opcional de productos consumidos.
-\end{itemize}
-
-Si se cargan productos usados, el sistema valida el stock disponible en Redis. La cantidad debe ser positiva y entera. Si el stock alcanza, la consulta se inserta en MongoDB y luego se descuenta el stock usando la lógica atómica de la Query 15.
-
-Ejemplo de alta de consulta con consumo de stock:
-
-\begin{codeblock}[Alta de consulta]{bash}
-curl -X POST http://localhost:3000/api/consultas \
-  -H "Content-Type: application/json" \
-  -d '{
-    "id_paciente": "P002",
-    "id_vet": "V003",
-    "tipo": "Consulta",
-    "motivo": "Control",
-    "diagnostico": "Sano",
-    "costo": 3000,
-    "estado": "Cerrada",
-    "productos_usados": [
-      { "id_producto": "PRD001", "cantidad": 2 }
-    ]
-  }'
-\end{codeblock}
-
-Después de registrar una consulta se invalidan las cachés que dependen de atenciones: diagnósticos frecuentes, ingresos por veterinario del mes y consultas recientes por veterinario. Por eso, si se ejecuta alguna de esas queries después de cargar una consulta, el primer pedido vuelve a recalcular el resultado.
-
-\subsection{Manejo de stock}
-
-El stock operativo se administra en Redis. Para ver productos con pocas unidades se usa Q8, que consulta el \textit{Sorted Set} \code{stock:unidades} y luego completa los datos descriptivos desde MongoDB.
-
-Para descontar stock directamente se usa Q15. Desde el dashboard alcanza con indicar el id del producto y la cantidad. Desde la API se puede probar así:
-
-\begin{codeblock}[Decremento de stock]{bash}
-curl -X POST http://localhost:3000/api/decrementar-stock \
-  -H "Content-Type: application/json" \
-  -d '{ "id_producto": "PRD001", "cantidad": 3 }'
-\end{codeblock}
-
-Si el producto no existe o si no hay unidades suficientes, la API responde con un error. La operación de descuento se ejecuta con Lua dentro de Redis, de modo que la validación y el decremento ocurren en una única operación atómica.
-
-\subsection{Uso directo de la API}
-
-Todos los servicios también pueden usarse directamente por HTTP. Los endpoints principales son:
-
-\begin{itemize}
-    \item \code{GET /api/pacientes-activos}
-    \item \code{GET /api/consultas-seguimiento}
-    \item \code{GET /api/historial-paciente/:id}
-    \item \code{GET /api/propietarios-multiples-pacientes}
-    \item \code{GET /api/vets-activos-consultas-60d}
-    \item \code{GET /api/pacientes-vacunas-vencidas}
-    \item \code{GET /api/top-diagnosticos}
-    \item \code{GET /api/stock-bajo?umbral=50}
-    \item \code{GET /api/controles-baratos?max=5000}
-    \item \code{GET /api/pacientes-sucursal?sucursal=Palermo}
-    \item \code{GET /api/ingresos-vet-mes}
-    \item \code{GET /api/propietarios-inactivos}
-    \item \code{POST /api/propietarios}
-    \item \code{PUT /api/propietarios/:id}
-    \item \code{DELETE /api/propietarios/:id}
-    \item \code{POST /api/consultas}
-    \item \code{POST /api/decrementar-stock}
-\end{itemize}
-
-La API devuelve JSON tanto en respuestas correctas como en errores. Cuando hay un error de validación, la respuesta tiene la forma:
-
-\begin{codeblock}[Formato de error]{json}
-{
-  "error": "Mensaje descriptivo del problema"
-}
-\end{codeblock}
-
-\subsection{Caché}
-
-Redis también se usa como caché de algunas consultas de lectura. Esto se puede ver especialmente en:
-
-\begin{itemize}
-    \item Q5, veterinarios activos con consultas en los últimos 60 días.
-    \item Q7, top 5 diagnósticos.
-    \item Q11, ingresos por veterinario en el mes actual.
-\end{itemize}
-
-Si se quiere limpiar manualmente la caché durante una prueba, se puede usar:
-
-\begin{codeblock}[Limpiar caché]{bash}
-curl -X POST http://localhost:3000/api/cache/flush
-\end{codeblock}
-
-Esto elimina las claves con prefijo \code{cache:}. No borra el stock ni los datos principales de MongoDB.
-
-\section{Resultados}
-
-El resultado final es una aplicación reproducible que permite levantar MongoDB y Redis con Docker, cargar los datos desde CSV y ejecutar las 15 consultas y servicios pedidos desde una API REST o desde el dashboard web.
-
-La estructura de código quedó organizada por responsabilidad. Las consultas se separaron en módulos individuales dentro de \code{src/queries}, de modo que cada query tiene su propia función documentada. El servidor Express se limita a exponer los endpoints, validar parámetros simples y devolver las respuestas en JSON.
-
-En MongoDB se cargan las colecciones principales del dominio: propietarios, pacientes, veterinarios, consultas, vacunaciones y productos. También se crean índices para acompañar filtros y relaciones frecuentes, y se define la vista de ingresos mensuales usada por la Query 11.
-
-En Redis se carga el \textit{Sorted Set} \code{stock:unidades} para el stock operativo. Además, se usan claves con prefijo \code{cache:} para guardar resultados derivados de forma temporal.
-
-El dashboard permite probar las consultas de lectura, las operaciones de ABM, el alta de consultas y el decremento de stock. Además, muestra cuándo una query cacheada se resolvió desde Redis o cuándo fue recalculada contra MongoDB. Esto ayuda a verificar de forma práctica la separación entre fuente de verdad y caché.
-
-También se validaron casos de escritura relevantes para el dominio: el alta de propietarios no permite duplicar identificadores, la baja se realiza de forma lógica, el alta de consultas valida paciente y veterinario existentes y activos, y el decremento de stock no permite dejar unidades negativas. En las operaciones de stock, Redis ejecuta la validación y el descuento mediante Lua para mantener la atomicidad del contador.
-
 \section{Limitaciones}
 
-La principal limitación técnica es que MongoDB y Redis no comparten una transacción global. El caso más sensible aparece al registrar una consulta que consume productos: el sistema inserta la atención en MongoDB y descuenta unidades en Redis. Para reducir el riesgo de inconsistencias, primero se valida el stock disponible, luego se inserta la consulta y finalmente se descuenta con un script Lua atómico. Aun así, si hubiera una falla justo entre ambos motores, podría existir una inconsistencia temporal.
+La principal limitación técnica es que MongoDB y Redis no comparten una transacción global. El caso más sensible aparece al registrar una consulta que consume productos, donde el sistema inserta la atención en MongoDB y descuenta unidades en Redis. Para reducir el riesgo de inconsistencias, primero se valida el stock disponible, luego se inserta la consulta y finalmente se descuenta con un script Lua atómico. Aun así, si hubiera una falla justo entre ambos motores, podría existir una inconsistencia temporal.
 
-Una mejora posible para un sistema productivo sería implementar un patrón de \textit{outbox} o una saga. Por ejemplo, se podría insertar en MongoDB la consulta junto con un evento pendiente de descuento, y luego un worker aplicaría el cambio en Redis con reintentos y registro de estado. Para el alcance del TP se priorizó una implementación más directa, pero dejando explícita la limitación de coordinación entre motores.
-
-Otra limitación es que la caché es \textit{best-effort}. Las claves \code{cache:*} tienen TTL corto y se invalidan cuando la aplicación registra una nueva consulta, pero podrían quedar datos levemente desactualizados si alguien modifica MongoDB por fuera de la API. Esto es aceptable para consultas de dashboard, porque no se usa la caché como fuente de verdad ni para decisiones transaccionales.
+Otra limitación es que la caché es best-effort. Las claves \code{cache:*} tienen TTL corto y se invalidan cuando la aplicación registra una nueva consulta, pero podrían quedar datos levemente desactualizados si alguien modifica MongoDB por fuera de la API. Esto es aceptable para consultas de dashboard, porque la caché no se usa como fuente de verdad ni para decisiones transaccionales.
 
 Redis se usa como almacenamiento operativo del stock. En este setup corre dentro de Docker con la configuración simple del proyecto. Para producción habría que endurecer su persistencia y tolerancia a fallos, por ejemplo configurando AOF o snapshots RDB según la necesidad, replicación, backups y una política clara de recuperación ante caídas.
 
-También se simplificó la seguridad del entorno. MongoDB y Redis se levantan sin autenticación ni TLS para facilitar la corrección y la ejecución local del trabajo. En un ambiente real deberían usarse credenciales, secretos fuera del repositorio, redes internas, firewall y conexiones seguras.
-
-Por último, las fechas relativas dependen de la fecha del sistema. Esto afecta especialmente queries como últimos 60 días, vacunas vencidas, último año e ingresos del mes actual. Para que la Query 11 no quede vacía al ejecutar el TP en distintos meses, el seed agrega algunas consultas del mes corriente. Esta decisión mejora la reproducibilidad de la demo, pero también implica que parte del dataset se calcula al momento de cargar la base.
+También se simplificó la seguridad del entorno. MongoDB y Redis se levantan sin autenticación ni TLS para facilitar la ejecución local. En un ambiente real deberían usarse credenciales, secretos fuera del repositorio, redes internas, firewall y conexiones seguras.
 
 \section{Conclusiones}
 
 El trabajo permitió aplicar una arquitectura de persistencia políglota con dos motores NoSQL de paradigmas distintos y responsabilidades bien separadas. MongoDB funcionó como base principal del dominio clínico y administrativo, mientras que Redis se usó para stock operativo, decrementos atómicos y caché de consultas frecuentes.
 
-El modelo de datos se diseñó a partir de las consultas pedidas. Las entidades principales se mantuvieron como colecciones independientes y relacionadas por identificadores, lo que permitió resolver los cruces necesarios con pipelines de agregación. Redis, en cambio, se utilizó solamente donde aportaba una ventaja concreta: ordenar y filtrar stock por cantidad, descontar unidades de forma atómica y acelerar lecturas repetidas.
+El modelo de datos se diseñó a partir de las consultas que debía resolver el sistema. Las entidades principales se mantuvieron como colecciones independientes y relacionadas por identificadores, lo que permitió resolver los cruces necesarios con pipelines de agregación. Redis se utilizó solamente donde aportaba una ventaja concreta, como ordenar y filtrar stock por cantidad, descontar unidades de forma atómica y acelerar lecturas repetidas.
 
-La solución final cumple con las 15 consultas y servicios de la consigna, mantiene el código organizado en módulos separados y deja documentadas las decisiones de diseño principales. Si bien existen limitaciones propias de coordinar dos motores sin transacción global, la implementación resulta adecuada para el alcance del TP: es simple de levantar, reproducible, fácil de probar y coherente con el uso de MongoDB y Redis dentro del sistema VetSalud.
-
-% =========================================================
-% REFERENCIAS
-% =========================================================
-\section{Referencias}
-
-\begin{itemize}
-    \item Documentación oficial de MongoDB: \url{https://www.mongodb.com/docs/}
-    \item Documentación oficial de Redis: \url{https://redis.io/docs/latest/}
-    \item Documentación de Docker: \url{https://docs.docker.com/}
-\end{itemize}
+La solución final resuelve las quince consultas y servicios definidos, mantiene el código organizado en módulos separados y deja documentadas las decisiones de diseño principales. Si bien existen limitaciones propias de coordinar dos motores sin transacción global, la implementación resulta adecuada para el alcance planteado, ya que es simple de levantar, reproducible, fácil de probar y coherente con el uso de MongoDB y Redis dentro del sistema VetSalud.
 
 \end{document}
