@@ -46,7 +46,7 @@ app.get('/api/stock-bajo',                       wrap((req) => q.stockBajo(posit
 app.get('/api/controles-baratos',                wrap((req) => q.controlesBaratos(positiveParam(req.query.max, 5000, 'max'))));
 app.get('/api/pacientes-sucursal',               wrap((req) => q.pacientesPorSucursal(req.query.sucursal || 'Palermo')));
 app.get('/api/ingresos-vet-mes',                 wrap(()    => q.ingresosPorVetMesActual()));
-app.get('/api/propietarios-inactivos',           wrap(()    => q.propietariosSinConsultasUltimoAnio()));
+app.get('/api/propietarios-sin-consultas',       wrap(()    => q.propietariosSinConsultasUltimoAnio()));
 
 app.post  ('/api/propietarios',                  wrap((req) => q.altaPropietario(req.body)));
 app.put   ('/api/propietarios/:id',              wrap((req) => q.modificarPropietario(req.params.id, req.body)));

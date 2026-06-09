@@ -55,7 +55,7 @@ vetsalud/
 | 9 | Controles con costo < N | Mongo | `GET /api/controles-baratos?max=5000` |
 | 10 | Pacientes por sucursal | Mongo | `GET /api/pacientes-sucursal?sucursal=Palermo` |
 | 11 | Ingresos por vet del mes actual | Mongo (cache) | `GET /api/ingresos-vet-mes` |
-| 12 | Propietarios a revisar | Mongo | `GET /api/propietarios-inactivos` |
+| 12 | Propietarios a revisar | Mongo | `GET /api/propietarios-sin-consultas` |
 | 13 | ABM de propietarios | Mongo | `POST` / `PUT` / `DELETE /api/propietarios[/:id]` |
 | 14 | Alta de consulta + descuento de stock | Mongo + Redis | `POST /api/consultas` |
 | 15 | Decrementar stock (atómico) | Redis (Lua) | `POST /api/decrementar-stock` |

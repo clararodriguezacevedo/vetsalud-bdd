@@ -1,16 +1,15 @@
 import { connect } from '../db.js';
 
 /**
- * Consulta 12 - Propietarios a revisar por inactividad.
+ * Consulta 12 - Propietarios sin consultas en el último año.
  *
- * Requisito de la consigna:
- * listar propietarios que no registran consultas en el ultimo anio.
- * El equipo interpreta el caso como un tablero de propietarios a revisar,
- * incluyendo tambien propietarios dados de baja o sin mascotas registradas.
+ * Lista propietarios que no registran actividad clínica:
+ *  - propietarios sin pacientes registrados.
+ *  - propietarios con pacientes pero sin consultas en el último año.
  *
  * Motor: MongoDB.
  * Colecciones: propietarios, pacientes, consultas.
- * Endpoint: GET /api/propietarios-inactivos.
+ * Endpoint: GET /api/propietarios-sin-consultas.
  */
 export async function propietariosSinConsultasUltimoAnio() {
   const { db } = await connect();
@@ -56,7 +55,6 @@ export async function propietariosSinConsultasUltimoAnio() {
       {
         $match: {
           $or: [
-            { activo: false },
             { cantidad_mascotas: 0 },
             { cantidad_consultas_recientes: 0 },
           ],
@@ -65,22 +63,14 @@ export async function propietariosSinConsultasUltimoAnio() {
       {
         $addFields: {
           categoria: {
-            $switch: {
-              branches: [
-                { case: { $eq: ['$activo', false] }, then: 'Dado de baja' },
-                { case: { $eq: ['$cantidad_mascotas', 0] }, then: 'Sin mascotas' },
-              ],
-              default: 'Sin consultas en el último año',
-            },
+            $cond: [
+              { $eq: ['$cantidad_mascotas', 0] },
+              'Sin mascotas',
+              'Sin consultas en el último año',
+            ],
           },
           _orden_categoria: {
-            $switch: {
-              branches: [
-                { case: { $eq: ['$activo', false] }, then: 1 },
-                { case: { $eq: ['$cantidad_mascotas', 0] }, then: 2 },
-              ],
-              default: 3,
-            },
+            $cond: [{ $eq: ['$cantidad_mascotas', 0] }, 1, 2],
           },
         },
       },

@@ -636,7 +636,7 @@
         <div class="card">
           <span class="card-number">12</span>
           <h3>Propietarios a revisar</h3>
-          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/propietarios-inactivos</p>
+          <p class="raw-endpoint"><span class="method-pill get">GET</span>/api/propietarios-sin-consultas</p>
           <button class="action" onclick="q12()">Ejecutar</button>
         </div>
 
@@ -958,7 +958,7 @@
     function q9()  { run(`Controles con costo < $${v('maxCosto')}`, 'GET', `/api/controles-baratos?max=${v('maxCosto')}`); }
     function q10() { run(`Pacientes de la sucursal ${v('sucursal')}`, 'GET', `/api/pacientes-sucursal?sucursal=${encodeURIComponent(v('sucursal'))}`); }
     function q11() { run('Ingresos por veterinario - mes actual', 'GET', '/api/ingresos-vet-mes'); }
-    function q12() { run('Propietarios a revisar', 'GET', '/api/propietarios-inactivos'); }
+    function q12() { run('Propietarios a revisar', 'GET', '/api/propietarios-sin-consultas'); }
 
     function q13Alta() {
       run(`Alta propietario ${v('newId')}`, 'POST', '/api/propietarios', {

@@ -877,28 +877,16 @@ Después de traer ambos conjuntos, se usa \code{\$setUnion} para unir los identi
 
 \subsubsection{Query 12: Propietarios a revisar}
 
-La duodécima query expone el endpoint \code{GET /api/propietarios-inactivos}. Para esta consulta consideramos como propietarios a revisar a los dados de baja, los que no tienen mascotas registradas y los activos con mascotas pero sin consultas recientes.
+La duodécima query expone el endpoint \code{GET /api/propietarios-sin-consultas}. Para esta consulta consideramos como propietarios a revisar a los que no registran actividad clínica, ya sea porque no tienen mascotas registradas o porque tienen mascotas pero ninguna con consultas en el último año. 
 
-La función calcula el límite temporal a partir de la fecha del sistema, tomando el inicio del día ubicado un año atrás. Luego parte de \code{propietarios}, une cada dueño con sus pacientes mediante \code{\$lookup} y, con esos identificadores de pacientes, busca consultas cuya fecha sea mayor o igual a ese límite.
+La función calcula el límite temporal a partir de la fecha del sistema, tomando el inicio del día ubicado un año atrás. Une cada dueño con sus pacientes mediante \code{\$lookup} y, con esos identificadores de pacientes, busca consultas cuya fecha sea mayor o igual a ese límite.
 
-Después agrega la cantidad de mascotas y la cantidad de consultas recientes. La condición final conserva propietarios que cumplan al menos una de las tres condiciones definidas. Esta interpretación permite detectar dueños sin actividad vigente desde distintas causas, como una baja administrativa, la ausencia de mascotas o la falta de consultas durante el período analizado.
+Después agrega la cantidad de mascotas y la cantidad de consultas recientes. La condición final conserva propietarios sin mascotas o sin consultas en el período. Esta interpretación permite detectar dueños sin actividad reciente, ya sea por la ausencia de mascotas o por la falta de consultas durante el período analizado.
 
-Para que el resultado sea fácil de leer, la query asigna una \code{categoria} con \code{\$switch}. La categoría \code{Dado de baja} tiene prioridad sobre las demás. Le sigue \code{Sin mascotas} y, como caso restante, queda \code{Sin consultas en el último año}. Ese mismo criterio se usa para ordenar el resultado. La consulta tiene en cuenta consultas y deja afuera las vacunaciones, dado que el criterio se define sobre consultas registradas.
+Para que el resultado sea fácil de leer, la query asigna una \code{categoria}. Si el propietario no tiene mascotas queda como \code{Sin mascotas}, y en caso contrario queda como \code{Sin consultas en el último año}. Ese mismo criterio se usa para ordenar el resultado. La consulta tiene en cuenta consultas y deja afuera las vacunaciones, dado que el criterio se define sobre consultas registradas.
 
 \begin{codeblock}[Fragmento de resultado de Query 12]{json}
 [
-  {
-    "_id": "C010",
-    "nombre": "Martin",
-    "apellido": "Acosta",
-    "email": "martin@gmail.com",
-    "ciudad": "Bahia Blanca",
-    "provincia": "Buenos Aires",
-    "activo": false,
-    "cantidad_mascotas": 1,
-    "cantidad_consultas_recientes": 1,
-    "categoria": "Dado de baja"
-  },
   {
     "_id": "C009",
     "nombre": "Sofia",
